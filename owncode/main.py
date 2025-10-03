@@ -48,7 +48,7 @@ DATA = CWD / "__data__" / SCRIPT_NAME
 DATA.mkdir(exist_ok=True)
 
 # Global variables
-SPAWN_POS = [0,0,0]
+SPAWN_POS = [-0.8, 0, 0.1]
 NUM_OF_MODULES = 30
 TARGET_POSITION = [5, 0, 0.5]
 
@@ -75,6 +75,9 @@ def evaluate_robot_genotype(genotype: list[np.ndarray]) -> float:
         Fitness score (negative distance to target)
     """
     try:
+        # CRITICAL: Reset MuJoCo control callback to ensure clean state
+        mj.set_mjcb_control(None)
+        
         # Convert genotype to robot
         nde = NeuralDevelopmentalEncoding(number_of_modules=NUM_OF_MODULES)
         p_matrices = nde.forward(genotype)
@@ -104,21 +107,26 @@ def evaluate_robot_genotype(genotype: list[np.ndarray]) -> float:
             tracker=tracker,
         )
 
-        # Run simulation (use "simple" mode for speed - no visualization)
+        # Run simulation 
         experiment(robot=core, controller=ctrl, mode="simple", duration=15)
 
         # Calculate fitness
         if tracker.history["xpos"] and len(tracker.history["xpos"][0]) > 0:
             fitness = fitness_function(tracker.history["xpos"][0])
         else:
-            # If simulation failed or no movement, return very bad fitness
+            # If no position history, return failure fitness
             fitness = -100.0
-            
+        
+        # CRITICAL: Clean up MuJoCo state after evaluation
+        mj.set_mjcb_control(None)
+        
         return fitness
         
     except Exception as e:
         # If anything goes wrong, return very bad fitness
         console.log(f"Simulation failed: {e}")
+        # Ensure MuJoCo state is clean even on failure
+        mj.set_mjcb_control(None)
         return -100.0
 
 
@@ -200,9 +208,9 @@ def nn_controller(
     # Initialize the networks weights randomly
     # Normally, you would use the genes of an individual as the weights,
     # Here we set them randomly for simplicity.
-    w1 = RNG.normal(loc=0.0138, scale=0.5, size=(input_size, hidden_size))
-    w2 = RNG.normal(loc=0.0138, scale=0.5, size=(hidden_size, hidden_size))
-    w3 = RNG.normal(loc=0.0138, scale=0.5, size=(hidden_size, output_size))
+    w1 = RNG.normal(loc=0.0138, scale=0.2, size=(input_size, hidden_size))
+    w2 = RNG.normal(loc=0.0138, scale=0.2, size=(hidden_size, hidden_size))
+    w3 = RNG.normal(loc=0.0138, scale=0.2, size=(hidden_size, output_size))
 
     # Get inputs, in this case the positions of the actuator motors (hinges)
     inputs = data.qpos
@@ -213,7 +221,7 @@ def nn_controller(
     outputs = np.tanh(np.dot(layer2, w3))
 
     # Scale the outputs
-    return outputs * np.pi
+    return outputs * np.pi/4
 
 
 def experiment(
@@ -233,7 +241,8 @@ def experiment(
 
     # Spawn robot in the world
     # Check docstring for spawn conditions
-    world.spawn(robot.spec, spawn_position=SPAWN_POS)
+    # CRITICAL FIX: Pass a copy of SPAWN_POS to prevent in-place modification!
+    world.spawn(robot.spec, spawn_position=SPAWN_POS.copy())
 
     # Generate the model and data
     # These are standard parts of the simulation USE THEM AS IS, DO NOT CHANGE
@@ -313,7 +322,7 @@ def plot_evolution_progress(best_fitness_history: list[float], avg_fitness_histo
 def simulate_best_robot(best_genotype: list[np.ndarray], mode: ViewerTypes = "launcher") -> None:
     """Simulate the best evolved robot."""
     console.log("Simulating best evolved robot...")
-    
+    mj.set_mjcb_control(None)  # DO NOT REMOVE
     # Convert genotype to robot
     nde = NeuralDevelopmentalEncoding(number_of_modules=NUM_OF_MODULES)
     p_matrices = nde.forward(best_genotype)
@@ -367,8 +376,8 @@ def main() -> None:
     
     # Evolutionary algorithm parameters
     genotype_size = 64
-    population_size = 20  # Start small for testing
-    generations = 10      # Adjust based on computational resources
+    population_size = 100  # Start small for testing
+    generations = 5      
     
     # Create evolutionary algorithm
     ea = evolutionary_algorithm(
@@ -376,11 +385,11 @@ def main() -> None:
         generations=generations,
         genotype_size=genotype_size,
         evaluator=evaluate_robot_genotype,
-        mutation_rate=0.1,
+        mutation_rate=0.2,
         crossover_rate=0.7,
-        crossover_type="blend",  # Good for real-valued genes
-        elitism=2,              # Keep 2 best individuals
-        selection="tournament",
+        crossover_type="onepoint",  # Good for real-valued genes
+        elitism=3,              # Keep 3 best individuals
+        selection="roulette",  # Roulette or tournament
         tournament_size=3
     )
     
@@ -401,7 +410,7 @@ def main() -> None:
     plot_evolution_progress(best_fitness_history, avg_fitness_history)
     
     # Simulate and visualize the best robot
-    simulate_best_robot(best_robot, mode="launcher")
+    simulate_best_robot(best_robot, mode="video")
 
 
 def main_single_robot() -> None:
@@ -421,8 +430,9 @@ def main_single_robot() -> None:
     ]
 
     # Simulate single robot
-    simulate_best_robot(genotype, mode="launcher")
+    simulate_best_robot(genotype, mode="video")
 
 
 if __name__ == "__main__":
     main()
+    #main_single_robot()

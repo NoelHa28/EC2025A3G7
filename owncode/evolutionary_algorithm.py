@@ -201,6 +201,7 @@ class evolutionary_algorithm:
     def select_parents(self, population: list[list[np.ndarray]], fitness_scores: list[float]) -> tuple[list[np.ndarray], list[np.ndarray]]:
         """
         Select two parents from the population based on the specified selection method.
+        Excludes individuals with fitness = -100 (failed simulations) from selection.
         
         Args:
             population: List of genotypes in the current population
@@ -209,13 +210,25 @@ class evolutionary_algorithm:
         Returns:
             tuple: Two selected parent genotypes
         """
+        # Filter out failed individuals (fitness = -100) for parent selection
+        viable_indices = [i for i, fitness in enumerate(fitness_scores) if fitness != -100.0]
+        
+        # Safety check: ensure we have at least 2 viable individuals
+        if len(viable_indices) < 2:
+            # Fallback: use all individuals if too few viable ones
+            print(f"  → Warning: Only {len(viable_indices)} viable individuals, using all for selection")
+            viable_indices = list(range(len(population)))
+        
+        viable_population = [population[i] for i in viable_indices]
+        viable_fitness_scores = [fitness_scores[i] for i in viable_indices]
+        
         if self.selection == "tournament":
-            parent1 = self._tournament_selection(population, fitness_scores)
-            parent2 = self._tournament_selection(population, fitness_scores)
+            parent1 = self._tournament_selection(viable_population, viable_fitness_scores)
+            parent2 = self._tournament_selection(viable_population, viable_fitness_scores)
             return parent1, parent2
         elif self.selection == "roulette":
-            parent1 = self._roulette_selection(population, fitness_scores)
-            parent2 = self._roulette_selection(population, fitness_scores)
+            parent1 = self._roulette_selection(viable_population, viable_fitness_scores)
+            parent2 = self._roulette_selection(viable_population, viable_fitness_scores)
             return parent1, parent2
         else:
             raise ValueError(f"Unknown selection method: {self.selection}")
@@ -336,6 +349,7 @@ class evolutionary_algorithm:
         average_fitness_history = []
         
         for generation in range(self.generations):
+            print(f"Generation {generation+1}/{self.generations}")
             # Evaluate population
             fitness_scores = self.evaluate_population(population)
             
