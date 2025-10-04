@@ -71,7 +71,6 @@ def fitness_function(history: list[float]) -> float:
     )
     return -cartesian_distance
 
-
 def evaluate_robot_genotype(genotype: list[np.ndarray]) -> float:
     """
     Evaluate a robot genotype by simulating it and returning fitness.
@@ -80,16 +79,7 @@ def evaluate_robot_genotype(genotype: list[np.ndarray]) -> float:
     try:
         mj.set_mjcb_control(None)  # reset MuJoCo state
 
-        # Convert genotype to robot body
-        nde = NeuralDevelopmentalEncoding(number_of_modules=NUM_OF_MODULES)
-        p_matrices = nde.forward(genotype)
-
-        hpd = HighProbabilityDecoder(NUM_OF_MODULES)
-        robot_graph: DiGraph[Any] = hpd.probability_matrices_to_graph(
-            p_matrices[0],
-            p_matrices[1],
-            p_matrices[2],
-        )
+        robot_graph = genotype_to_phenotype(genotype)
 
         core = construct_mjspec_from_graph(robot_graph)
 
@@ -205,44 +195,20 @@ def show_xpos_history(history: list[float]) -> None:
     # Show results
     plt.show()
 
-def simple_controller(
-    model: mj.MjModel,
-    data: mj.MjData,
-) -> npt.NDArray[np.float64]:
+def simple_controller(model: mj.MjModel, data: mj.MjData) -> np.ndarray:
     """
-    Genotype-based controller that uses ALL 3 vectors separately!
-    - type_p_genes: Controls frequency of oscillation
-    - conn_p_genes: Controls amplitude of oscillation  
-    - rot_p_genes: Controls phase offset for coordination
+    Simple sine controller that drives each actuator with a sinusoidal torque.
     """
-    global _current_genotype
-    
-    if _current_genotype is None:
-        # No genotype - return small oscillation
-        t = data.time
-        return 0.1 * np.sin(2 * np.pi * 0.5 * t) * np.ones(model.nu)
-    
-    # Extract all 3 vectors
-    type_genes = _current_genotype[0]   # For frequency control
-    conn_genes = _current_genotype[1]   # For amplitude control
-    rot_genes = _current_genotype[2]    # For phase control
-    
+    n = model.nu  # number of actuators
     t = data.time
-    outputs = np.zeros(model.nu)
-    
-    # Use all 3 vectors to control each actuator
-    for i in range(model.nu):
-        gene_idx = i % len(type_genes)  # Cycle through genes
-        
-        # Each vector controls different aspect of movement
-        frequency = 0.5 + type_genes[gene_idx] * 1.0    # 0.5-1.5 Hz from type genes (reduced for stability)
-        amplitude = 0.2 + conn_genes[gene_idx] * 0.4    # 0.2-0.6 from connection genes (more moderate)
-        phase = rot_genes[gene_idx] * 2 * np.pi         # 0-2π phase from rotation genes
-        
-        # Generate coordinated oscillation with stability damping
-        outputs[i] = amplitude * np.sin(2 * np.pi * frequency * t + phase)
-    
-    return outputs
+
+    # Tunable parameters
+    frequency = np.random.uniform(0.5, 1.5)  # Hz
+    amplitude = np.pi / 2  # full-range amplitude
+    phase_offset = np.linspace(0, np.pi, n)  # staggered phases per actuator
+
+    ctrl = amplitude * np.sin(2 * np.pi * frequency * t + phase_offset)
+    return ctrl.astype(np.float64)
     
 
 def nn_controller(
@@ -372,17 +338,9 @@ def simulate_best_robot(best_genotype: list[np.ndarray], mode: ViewerTypes = "la
     console.log("Simulating best evolved robot...")
     mj.set_mjcb_control(None)  # DO NOT REMOVE
     # Convert genotype to robot
-    nde = NeuralDevelopmentalEncoding(number_of_modules=NUM_OF_MODULES)
-    p_matrices = nde.forward(best_genotype)
 
-    # Decode the high-probability graph
-    hpd = HighProbabilityDecoder(NUM_OF_MODULES)
-    robot_graph: DiGraph[Any] = hpd.probability_matrices_to_graph(
-        p_matrices[0],
-        p_matrices[1],
-        p_matrices[2],
-    )
-
+    robot_graph = genotype_to_phenotype(best_genotype)
+    
     # Save the best robot graph
     save_graph_as_json(
         robot_graph,
@@ -410,7 +368,7 @@ def simulate_best_robot(best_genotype: list[np.ndarray], mode: ViewerTypes = "la
     )
 
     # Run simulation with visualization
-    experiment(robot=core, controller=ctrl, mode=mode, duration=40)
+    experiment(robot=core, controller=ctrl, mode=mode, duration=120)
 
     # Show trajectory
     if tracker.history["xpos"] and len(tracker.history["xpos"][0]) > 0:
@@ -481,9 +439,24 @@ def main_single_robot() -> None:
     ]
 
     # Simulate single robot
-    simulate_best_robot(genotype, mode="video")
+    simulate_best_robot(genotype)
 
+
+def genotype_to_phenotype(genotype: list[np.ndarray]):
+    """
+    Convert a genotype: list of 3 numpy arrays
+    into a robot phenotype DiGraph graph.
+    """
+    nde = NeuralDevelopmentalEncoding(number_of_modules=NUM_OF_MODULES)
+    p_matrices = nde.forward(genotype)
+
+    hpd = HighProbabilityDecoder(NUM_OF_MODULES)
+    return hpd.probability_matrices_to_graph(
+        p_matrices[0],
+        p_matrices[1],
+        p_matrices[2],
+    )
 
 if __name__ == "__main__":
     main()
-    #main_single_robot()
+    # main_single_robot()
