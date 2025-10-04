@@ -52,6 +52,14 @@ SPAWN_POS = [-0.8, 0, 0.1]
 NUM_OF_MODULES = 30
 TARGET_POSITION = [5, 0, 0.5]
 
+# Global genotype for controller
+_current_genotype = None
+
+def set_controller_genotype(genotype: list[np.ndarray]):
+    """Set the genotype for the controller to use all 3 vectors."""
+    global _current_genotype
+    _current_genotype = genotype
+
 
 def fitness_function(history: list[float]) -> float:
     xt, yt, zt = TARGET_POSITION
@@ -67,67 +75,69 @@ def fitness_function(history: list[float]) -> float:
 def evaluate_robot_genotype(genotype: list[np.ndarray]) -> float:
     """
     Evaluate a robot genotype by simulating it and returning fitness.
-    
-    Args:
-        genotype: Robot genotype [type_p_genes, conn_p_genes, rot_p_genes]
-        
-    Returns:
-        Fitness score (negative distance to target)
+    Handles invalid or unstable robots safely.
     """
     try:
-        # CRITICAL: Reset MuJoCo control callback to ensure clean state
-        mj.set_mjcb_control(None)
-        
-        # Convert genotype to robot
+        mj.set_mjcb_control(None)  # reset MuJoCo state
+
+        # Convert genotype to robot body
         nde = NeuralDevelopmentalEncoding(number_of_modules=NUM_OF_MODULES)
         p_matrices = nde.forward(genotype)
 
-        # Decode the high-probability graph
         hpd = HighProbabilityDecoder(NUM_OF_MODULES)
         robot_graph: DiGraph[Any] = hpd.probability_matrices_to_graph(
             p_matrices[0],
-            p_matrices[1], 
+            p_matrices[1],
             p_matrices[2],
         )
 
-        # Construct robot
         core = construct_mjspec_from_graph(robot_graph)
 
-        # Setup tracker
-        mujoco_type_to_find = mj.mjtObj.mjOBJ_GEOM
-        name_to_bind = "core"
+        # Tracker to monitor root
         tracker = Tracker(
-            mujoco_obj_to_find=mujoco_type_to_find,
-            name_to_bind=name_to_bind,
+            mujoco_obj_to_find=mj.mjtObj.mjOBJ_GEOM,
+            name_to_bind="core",
         )
 
-        # Setup controller
+        # CRITICAL: Set genotype for controller to use all 3 vectors
+        set_controller_genotype(genotype)
+
+        # Simple controller for stability (can swap with nn_controller later)
         ctrl = Controller(
-            controller_callback_function=nn_controller,
+            controller_callback_function=simple_controller,
             tracker=tracker,
         )
 
-        # Run simulation 
-        experiment(robot=core, controller=ctrl, mode="simple", duration=15)
+        # Run simulation
+        experiment(robot=core, controller=ctrl, mode="simple", duration=40)
 
-        # Calculate fitness
-        if tracker.history["xpos"] and len(tracker.history["xpos"][0]) > 0:
-            fitness = fitness_function(tracker.history["xpos"][0])
-        else:
-            # If no position history, return failure fitness
-            fitness = -100.0
-        
-        # CRITICAL: Clean up MuJoCo state after evaluation
-        mj.set_mjcb_control(None)
-        
-        return fitness
-        
+        # --- SAFETY CHECKS ---
+        # No trajectory recorded
+        if not tracker.history["xpos"] or len(tracker.history["xpos"][0]) < 5:
+            return -100
+
+        traj = np.array(tracker.history["xpos"][0])
+
+        # NaN or Inf in trajectory
+        if np.any(~np.isfinite(traj)):
+            return -100
+
+        # Explosion: robot goes absurdly far away
+        if np.max(np.abs(traj)) > 1000:
+            return -100
+
+        # Otherwise compute normal fitness
+        fitness = fitness_function(traj)
+        steps_recorded = len(tracker.history["xpos"][0]) if tracker.history["xpos"] else 0
+        console.log(f"Sim ran for {steps_recorded} steps")
+
+        return float(fitness)
+
     except Exception as e:
-        # If anything goes wrong, return very bad fitness
         console.log(f"Simulation failed: {e}")
-        # Ensure MuJoCo state is clean even on failure
-        mj.set_mjcb_control(None)
-        return -100.0
+        mj.set_mjcb_control(None)  # always clean up
+        return -100
+
 
 
 def show_xpos_history(history: list[float]) -> None:
@@ -195,6 +205,45 @@ def show_xpos_history(history: list[float]) -> None:
     # Show results
     plt.show()
 
+def simple_controller(
+    model: mj.MjModel,
+    data: mj.MjData,
+) -> npt.NDArray[np.float64]:
+    """
+    Genotype-based controller that uses ALL 3 vectors separately!
+    - type_p_genes: Controls frequency of oscillation
+    - conn_p_genes: Controls amplitude of oscillation  
+    - rot_p_genes: Controls phase offset for coordination
+    """
+    global _current_genotype
+    
+    if _current_genotype is None:
+        # No genotype - return small oscillation
+        t = data.time
+        return 0.1 * np.sin(2 * np.pi * 0.5 * t) * np.ones(model.nu)
+    
+    # Extract all 3 vectors
+    type_genes = _current_genotype[0]   # For frequency control
+    conn_genes = _current_genotype[1]   # For amplitude control
+    rot_genes = _current_genotype[2]    # For phase control
+    
+    t = data.time
+    outputs = np.zeros(model.nu)
+    
+    # Use all 3 vectors to control each actuator
+    for i in range(model.nu):
+        gene_idx = i % len(type_genes)  # Cycle through genes
+        
+        # Each vector controls different aspect of movement
+        frequency = 0.5 + type_genes[gene_idx] * 1.0    # 0.5-1.5 Hz from type genes (reduced for stability)
+        amplitude = 0.2 + conn_genes[gene_idx] * 0.4    # 0.2-0.6 from connection genes (more moderate)
+        phase = rot_genes[gene_idx] * 2 * np.pi         # 0-2π phase from rotation genes
+        
+        # Generate coordinated oscillation with stability damping
+        outputs[i] = amplitude * np.sin(2 * np.pi * frequency * t + phase)
+    
+    return outputs
+    
 
 def nn_controller(
     model: mj.MjModel,
@@ -223,11 +272,10 @@ def nn_controller(
     # Scale the outputs
     return outputs * np.pi/4
 
-
 def experiment(
     robot: Any,
     controller: Controller,
-    duration: int = 15,
+    duration: int = 40,
     mode: ViewerTypes = "viewer",
 ) -> None:
     """Run the simulation with random movements."""
@@ -352,14 +400,17 @@ def simulate_best_robot(best_genotype: list[np.ndarray], mode: ViewerTypes = "la
         name_to_bind=name_to_bind,
     )
 
+    # CRITICAL: Set genotype for controller to use all 3 vectors
+    set_controller_genotype(best_genotype)
+
     # Setup controller
     ctrl = Controller(
-        controller_callback_function=nn_controller,
+        controller_callback_function=simple_controller,
         tracker=tracker,
     )
 
     # Run simulation with visualization
-    experiment(robot=core, controller=ctrl, mode=mode, duration=15)
+    experiment(robot=core, controller=ctrl, mode=mode, duration=40)
 
     # Show trajectory
     if tracker.history["xpos"] and len(tracker.history["xpos"][0]) > 0:
@@ -376,8 +427,8 @@ def main() -> None:
     
     # Evolutionary algorithm parameters
     genotype_size = 64
-    population_size = 100  # Start small for testing
-    generations = 5      
+    population_size = 20  # Smaller population for faster testing
+    generations = 15     # More generations for better evolution
     
     # Create evolutionary algorithm
     ea = evolutionary_algorithm(
@@ -385,11 +436,11 @@ def main() -> None:
         generations=generations,
         genotype_size=genotype_size,
         evaluator=evaluate_robot_genotype,
-        mutation_rate=0.2,
-        crossover_rate=0.7,
-        crossover_type="onepoint",  # Good for real-valued genes
-        elitism=3,              # Keep 3 best individuals
-        selection="roulette",  # Roulette or tournament
+        mutation_rate=0.15,     # Lower mutation rate to preserve good solutions
+        crossover_rate=0.8,     # Higher crossover rate
+        crossover_type="uniform",  # Good for real-valued genes
+        elitism=2,              # Keep 2 best individuals (10% of population)
+        selection="tournament",  # Tournament selection
         tournament_size=3
     )
     
