@@ -14,6 +14,18 @@ CPU_COUNT = mp.cpu_count()
 
 type Genotype = np.ndarray
 
+class Mutation:
+    def __init__(self, mutation_rate: float):
+        self.mutation_rate = mutation_rate
+
+    def gaussian(self, genotype: Genotype) -> Genotype:
+        """Apply Gaussian mutation to the genotype."""
+        if RNG.random() < self.mutation_rate:
+            # Apply random mutation
+            mutation = RNG.normal(0, 0.1, size=genotype.shape).astype(np.float32)
+            genotype += mutation
+        return genotype
+
 class MindEA:
     def __init__(
         self,
@@ -45,7 +57,7 @@ class MindEA:
         self.robot = robot
         self.population_size = population_size
         self.generations = generations
-        self.mutation_rate = mutation_rate
+        self.mutate = Mutation(mutation_rate)
         self.crossover_type = crossover_type
         self.crossover_rate = crossover_rate
         self.elitism = elitism
@@ -53,7 +65,7 @@ class MindEA:
         self.tournament_size = tournament_size
     
     def random_genotype(self) -> Genotype:
-        return self.robot.brain.get_random_weights()
+        return self.robot.brain.generate_random_cpg_genotype(self.robot._number_of_hinges)
     
     def select_parents(self, population: list[Genotype], fitness_scores: list[float]) -> tuple[Genotype, Genotype]:
         """
@@ -149,7 +161,7 @@ class MindEA:
         return fitness_scores
 
     def _eval_func(self, genotype: Genotype) -> Any:
-        self.robot.brain.set_weights(genotype)
+        self.robot.brain.set_genotype(genotype)
         return evaluate(self.robot)
 
     def create_initial_population(self) -> list[Genotype]:
@@ -204,14 +216,12 @@ class MindEA:
             while len(new_population) < self.population_size:
                 # Select parents
                 parent1, parent2 = self.select_parents(population, fitness_scores)
+                child1, child2 = parent1.copy(), parent2.copy()
                 
                 # Apply crossover
                 if RNG.random() < self.crossover_rate:
                     child1, child2 = self.crossover(parent1, parent2)
-                else:
-                    # If no crossover, children are copies of parents
-                    child1, child2 = [gene.copy() for gene in parent1], [gene.copy() for gene in parent2]
-                
+
                 # Apply mutation
                 child1 = self.mutate.gaussian(child1)
                 child2 = self.mutate.gaussian(child2)

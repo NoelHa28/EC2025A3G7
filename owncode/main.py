@@ -1,32 +1,17 @@
-"""Assignment 3 template code."""
-
-# Standard library
+from typing import Literal
 from pathlib import Path
-import sys
-from typing import TYPE_CHECKING, Any, Literal
+import random
 
-import matplotlib.pyplot as plt
 import mujoco as mj
 import numpy as np
-import numpy.typing as npt
-from mujoco import viewer
-from copy import deepcopy
 
-# Local libraries
 from ariel import console
 from ariel.body_phenotypes.robogen_lite.constructor import (
     construct_mjspec_from_graph,
 )
-from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
 from ariel.simulation.controllers.controller import Controller
-from ariel.simulation.environments import OlympicArena
-from ariel.utils.renderers import single_frame_renderer, video_renderer
-from ariel.utils.runners import simple_runner
 from ariel.utils.tracker import Tracker
-from ariel.utils.video_recorder import VideoRecorder
 
-# Import evolutionary algorithm
-from evolutionary_algorithm import evolutionary_algorithm
 from ea import BodyEA
 from robot import Robot
 from fitness_function import fitness
@@ -34,7 +19,6 @@ from visualise import plot_evolution_progress, show_xpos_history
 from simulate import experiment
 from evaluate import evaluate
 import controller
-import random
 
 # Type Aliases
 type ViewerTypes = Literal["launcher", "video", "simple", "no_control", "frame"]
@@ -73,7 +57,7 @@ def simulate_best_robot(best_robot: Robot, mode: ViewerTypes = "launcher") -> No
 
     # Setup controller
     ctrl = Controller(
-        controller_callback_function=controller.nn,
+        controller_callback_function=controller.cpg,
         tracker=tracker,
     )
 
@@ -101,7 +85,7 @@ def main() -> None:
     
     # Evolutionary algorithm parameters
     genotype_size = 64
-    population_size = 800  # Smaller population for faster testing
+    population_size = 20  # Smaller population for faster testing
     generations = 10     # More generations for better evolution
     
     # Create evolutionary algorithm

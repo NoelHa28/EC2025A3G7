@@ -20,18 +20,6 @@ def simple(model: mj.MjModel, data: mj.MjData) -> npt.NDArray[np.float64]:
     ctrl = amplitude * np.sin(2 * np.pi * frequency * t + phase_offset)
     return ctrl.astype(np.float64)
 
-def nn(
-    model: mj.MjModel,
-    data: mj.MjData,
-    robot: Robot,
-) -> npt.NDArray[np.float64]:
-
-    return robot.brain.forward(
-        np.concatenate(
-            [data.qpos, data.qvel, data.qacc]
-        )
-    ).astype(np.float64)  # type: ignore
-
 def cpg(
     model: mj.MjModel,
     data: mj.MjData,

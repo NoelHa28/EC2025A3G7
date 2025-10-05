@@ -1,36 +1,27 @@
-from typing import Any
 import numpy as np
 from pathlib import Path
 
-from ariel.simulation.controllers.hopfs_cpg import HopfCPG
-from ariel.ec.genotypes.nde import NeuralDevelopmentalEncoding
 from ariel.body_phenotypes.robogen_lite.decoders.hi_prob_decoding import (
     HighProbabilityDecoder,
     save_graph_as_json,
-    draw_graph,
 )
 
-from brain import NNBrain
-from networkx import DiGraph
 from nde import NeuralDevelopmentalEncodingWithLoading
-from cpg import CPG
+from cpg import EvolvableCPG
 
 DATA = Path.cwd() / "__data__"
 
 NUM_OF_MODULES = 30
 
-# NDE = NeuralDevelopmentalEncodingWithLoading(number_of_modules=NUM_OF_MODULES)
-
-# if Path('nde_model.pt').exists():
-#     NDE.load('nde_model.pt')
-
-# NDE.eval()
-# HPD = HighProbabilityDecoder(NUM_OF_MODULES)
-
 class Robot:
-    def __init__(self, genes: list[np.ndarray], weights: np.ndarray | None = None) -> None:
+    def __init__(
+        self,
+        body_genotype: list[np.ndarray],
+        mind_genotype: np.ndarray | None = None
+    ) -> None:
         
-        self.genes = genes
+        self.body_genotype = body_genotype
+        self.mind_genotype = mind_genotype
 
         NDE = NeuralDevelopmentalEncodingWithLoading(number_of_modules=NUM_OF_MODULES)
 
@@ -40,23 +31,16 @@ class Robot:
         NDE.eval()
         HPD = HighProbabilityDecoder(NUM_OF_MODULES)
 
-        self.graph = HPD.probability_matrices_to_graph(*NDE.forward(self.genes))
+        self.graph = HPD.probability_matrices_to_graph(*NDE.forward(self.body_genotype))
         self._number_of_hinges = sum(1 for n in self.graph.nodes if self.graph.nodes[n]["type"] == "HINGE")
-        self.brain = self.build_brain(self._number_of_hinges * 3 + 6 * 3 + 1)
+        if self._number_of_hinges == 0:
+            raise RuntimeError("No hinges in the robot, cannot build brain.")
+        
+        self.brain = EvolvableCPG(self._number_of_hinges)
 
-        if weights is not None and isinstance(self.brain, NNBrain):
-            self.brain.set_weights(weights)
-
-    def build_cpg(self) -> CPG:
-        return CPG(self._number_of_hinges)
-
-    def build_brain(self, input_size: int, hidden_size: int = 16) -> NNBrain:
-        return NNBrain(
-            input_size=input_size,
-            hidden_size=hidden_size,
-            output_size=self._number_of_hinges,
-        )
-
+        if self.mind_genotype is not None:
+            self.brain.set_genotype(self.mind_genotype)
+    
     def save(self) -> None:
         save_graph_as_json(self.graph, DATA / "best_robot_graph.json")
         

@@ -36,7 +36,7 @@ def evaluate(robot: Robot) -> float:
 
         # Simple controller for stability (can swap with nn_controller later)
         ctrl = Controller(
-            controller_callback_function=controller.nn,
+            controller_callback_function=controller.cpg,
             tracker=tracker,
         )
 

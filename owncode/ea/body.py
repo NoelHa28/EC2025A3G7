@@ -258,17 +258,18 @@ class BodyEA:
 
     def _eval_func(self, genotype: Genotype) -> float:
         ea = MindEA(
-            Robot(genotype),
-            population_size=50,
-            generations=10,
+            robot=Robot(genotype),
+            population_size=20,
+            generations=1,
             mutation_rate=0.5,
-            crossover_rate=0.5,
-            crossover_type="blend",
-            elitism=5,
-            selection='tournament',
-            tournament_size=3
+            crossover_rate=0.0,
+            crossover_type="onepoint",
+            elitism=50,  # Keep top 10%
+            selection="tournament",
+            tournament_size=5,
         )
         _, weights, _ = ea.run()
+
         return max(weights)
 
     def create_initial_population(self) -> list[Genotype]:
