@@ -1,18 +1,115 @@
-import numpy as np
-from collections.abc import Callable
 from typing import Any
+from collections.abc import Callable
 import multiprocessing as mp
 
+import numpy as np
 from robot import Robot
-from ariel.body_phenotypes.robogen_lite.decoders.hi_prob_decoding import (
-    draw_graph,
-)
 
-# --- RANDOM GENERATOR SETUP --- #
 SEED = 42
 RNG = np.random.default_rng(SEED)
 
-class evolutionary_algorithm:
+from .mind import MindEA
+
+type Genotype = list[np.ndarray]
+
+class Mutate:
+    def __init__(self, mutation_rate: float = 0.1) -> None:
+        self.mutation_rate = mutation_rate
+
+    def gaussian(self, genotype: Genotype) -> Genotype:
+        mutated_genotype = []
+        
+        for gene in genotype:
+            # Create a copy to avoid modifying the original
+            mutated = gene.copy()
+            # Create a mask for which genes to mutate
+            mutation_mask = RNG.random(len(gene)) < self.mutation_rate
+            
+            # Apply Gaussian noise to selected genes
+            if np.any(mutation_mask):
+                noise = RNG.normal(0, 0.05, size=len(gene)).astype(np.float32)
+                mutated[mutation_mask] += noise[mutation_mask]
+                
+                # Clip values to stay within [0, 1] bounds
+                mutated = np.clip(mutated, 0.0, 1.0)
+            
+            mutated_genotype.append(mutated)
+        
+        return mutated_genotype
+
+class Crossover:
+    def __init__(self, crossover_type: str = "onepoint") -> None:
+        self.crossover_type = crossover_type
+
+    def __call__(self, parent1: Genotype, parent2: Genotype) -> tuple[Genotype, Genotype]:
+        if self.crossover_type == "onepoint":
+            return self._onepoint_crossover(parent1, parent2)
+        elif self.crossover_type == "uniform":
+            return self._uniform_crossover(parent1, parent2)
+        elif self.crossover_type == "blend":
+            return self._blend_crossover(parent1, parent2)
+        else:
+            raise ValueError(f"Unknown crossover type: {self.crossover_type}")
+    
+    def _onepoint_crossover(self, parent1: Genotype, parent2: Genotype) -> tuple[Genotype, Genotype]:
+        offspring1, offspring2 = [], []
+        
+        for gene1, gene2 in zip(parent1, parent2):
+            # Choose a random crossover point
+            crossover_point = RNG.integers(1, len(gene1))
+            
+            # Create offspring by swapping after crossover point
+            child1 = np.concatenate([gene1[:crossover_point], gene2[crossover_point:]])
+            child2 = np.concatenate([gene2[:crossover_point], gene1[crossover_point:]])
+            
+            offspring1.append(child1)
+            offspring2.append(child2)
+        
+        return offspring1, offspring2
+    
+    def _uniform_crossover(self, parent1: Genotype, parent2: Genotype) -> tuple[Genotype, Genotype]:
+        offspring1, offspring2 = [], []
+        
+        for gene1, gene2 in zip(parent1, parent2):
+            # Create random mask for gene selection
+            mask = RNG.random(len(gene1)) < 0.5
+            
+            # Create offspring using the mask
+            child1 = np.where(mask, gene1, gene2)
+            child2 = np.where(mask, gene2, gene1)
+            
+            offspring1.append(child1)
+            offspring2.append(child2)
+        
+        return offspring1, offspring2
+    
+    def _blend_crossover(self, parent1: Genotype, parent2: Genotype, alpha: float = 0.5) -> tuple[Genotype, Genotype]:
+        offspring1, offspring2 = [], []
+        
+        for gene1, gene2 in zip(parent1, parent2):
+            # Calculate min and max values for each gene position
+            min_vals = np.minimum(gene1, gene2)
+            max_vals = np.maximum(gene1, gene2)
+            
+            # Calculate range and extend it by alpha
+            gene_range = max_vals - min_vals
+            extended_min = min_vals - alpha * gene_range
+            extended_max = max_vals + alpha * gene_range
+            
+            # Generate random values within the extended range
+            child1 = RNG.uniform(extended_min, extended_max).astype(np.float32)
+            child2 = RNG.uniform(extended_min, extended_max).astype(np.float32)
+            
+            # Clip to maintain [0, 1] bounds
+            child1 = np.clip(child1, 0.0, 1.0)
+            child2 = np.clip(child2, 0.0, 1.0)
+            
+            offspring1.append(child1)
+            offspring2.append(child2)
+        
+        return offspring1, offspring2
+
+class BodyEA:
     def __init__(
         self,
         population_size: int,
@@ -45,15 +142,14 @@ class evolutionary_algorithm:
         self.generations = generations
         self.genotype_size = genotype_size
         self.evaluator = evaluator # Function to evaluate fitness
-        self.mutation_rate = mutation_rate
+        self.mutate = Mutate(mutation_rate)
+        self.crossover = Crossover(crossover_type)
         self.crossover_rate = crossover_rate
-        self.crossover_type = crossover_type
         self.elitism = elitism
         self.selection = selection
         self.tournament_size = tournament_size
     
-    # --- Genotype handling --- #
-    def random_genotype(self) -> list[np.ndarray]:
+    def random_genotype(self) -> Genotype:
         """Generate a random genotype."""
         type_p_genes = RNG.random(self.genotype_size).astype(np.float32)
         conn_p_genes = RNG.random(self.genotype_size).astype(np.float32)
@@ -65,147 +161,7 @@ class evolutionary_algorithm:
             rot_p_genes
         ]
     
-    # --- Mutation --- #
-    def mutate(self, genotype: list[np.ndarray]) -> list[np.ndarray]:
-        """
-        Mutate a genotype by applying random noise to genes with probability mutation_rate.
-        
-        Args:
-            genotype (list[np.ndarray]): The genotype to mutate, containing [type_p_genes, conn_p_genes, rot_p_genes]
-            
-        Returns:
-            list[np.ndarray]: The mutated genotype
-        """
-        mutated_genotype = []
-        
-        for gene in genotype:
-            # Create a copy to avoid modifying the original
-            mutated = gene.copy()
-            # Create a mask for which genes to mutate
-            mutation_mask = RNG.random(len(gene)) < self.mutation_rate
-            
-            # Apply Gaussian noise to selected genes
-            if np.any(mutation_mask):
-                noise = RNG.normal(0, 0.05, size=len(gene)).astype(np.float32)
-                mutated[mutation_mask] += noise[mutation_mask]
-                
-                # Clip values to stay within [0, 1] bounds
-                mutated = np.clip(mutated, 0.0, 1.0)
-            
-            mutated_genotype.append(mutated)
-        
-        return mutated_genotype
-    
-    # --- Crossover --- #
-    def crossover(self, parent1: list[np.ndarray], parent2: list[np.ndarray]) -> tuple[list[np.ndarray], list[np.ndarray]]:
-        """
-        Perform crossover between two parents based on the specified crossover type.
-        
-        Args:
-            parent1 (list[np.ndarray]): First parent genotype
-            parent2 (list[np.ndarray]): Second parent genotype
-            
-        Returns:
-            tuple[list[np.ndarray], list[np.ndarray]]: Two offspring genotypes
-        """
-        if self.crossover_type == "onepoint":
-            return self._onepoint_crossover(parent1, parent2)
-        elif self.crossover_type == "uniform":
-            return self._uniform_crossover(parent1, parent2)
-        elif self.crossover_type == "blend":
-            return self._blend_crossover(parent1, parent2)
-        else:
-            raise ValueError(f"Unknown crossover type: {self.crossover_type}")
-    
-    # --- Different crossover types --- #
-    def _onepoint_crossover(self, parent1: list[np.ndarray], parent2: list[np.ndarray]) -> tuple[list[np.ndarray], list[np.ndarray]]:
-        """
-        onepoint (single-point) crossover: Choose a random crossover point and swap genes after that point.
-        
-        Args:
-            parent1, parent2: Parent genotypes
-            
-        Returns:
-            Two offspring genotypes
-        """
-        offspring1, offspring2 = [], []
-        
-        for gene1, gene2 in zip(parent1, parent2):
-            # Choose a random crossover point
-            crossover_point = RNG.integers(1, len(gene1))
-            
-            # Create offspring by swapping after crossover point
-            child1 = np.concatenate([gene1[:crossover_point], gene2[crossover_point:]])
-            child2 = np.concatenate([gene2[:crossover_point], gene1[crossover_point:]])
-            
-            offspring1.append(child1)
-            offspring2.append(child2)
-        
-        return offspring1, offspring2
-    
-    def _uniform_crossover(self, parent1: list[np.ndarray], parent2: list[np.ndarray]) -> tuple[list[np.ndarray], list[np.ndarray]]:
-        """
-        Uniform crossover: Each gene has a 50% chance of coming from either parent.
-        
-        Args:
-            parent1, parent2: Parent genotypes
-            
-        Returns:
-            Two offspring genotypes
-        """
-        offspring1, offspring2 = [], []
-        
-        for gene1, gene2 in zip(parent1, parent2):
-            # Create random mask for gene selection
-            mask = RNG.random(len(gene1)) < 0.5
-            
-            # Create offspring using the mask
-            child1 = np.where(mask, gene1, gene2)
-            child2 = np.where(mask, gene2, gene1)
-            
-            offspring1.append(child1)
-            offspring2.append(child2)
-        
-        return offspring1, offspring2
-    
-    def _blend_crossover(self, parent1: list[np.ndarray], parent2: list[np.ndarray], alpha: float = 0.5) -> tuple[list[np.ndarray], list[np.ndarray]]:
-        """
-        Blend crossover: Create offspring by blending parent genes with some randomness.
-        
-        Args:
-            parent1, parent2: Parent genotypes
-            alpha: Blending parameter (0.5 = equal blend, higher values add more randomness)
-            
-        Returns:
-            Two offspring genotypes
-        """
-        offspring1, offspring2 = [], []
-        
-        for gene1, gene2 in zip(parent1, parent2):
-            # Calculate min and max values for each gene position
-            min_vals = np.minimum(gene1, gene2)
-            max_vals = np.maximum(gene1, gene2)
-            
-            # Calculate range and extend it by alpha
-            gene_range = max_vals - min_vals
-            extended_min = min_vals - alpha * gene_range
-            extended_max = max_vals + alpha * gene_range
-            
-            # Generate random values within the extended range
-            child1 = RNG.uniform(extended_min, extended_max).astype(np.float32)
-            child2 = RNG.uniform(extended_min, extended_max).astype(np.float32)
-            
-            # Clip to maintain [0, 1] bounds
-            child1 = np.clip(child1, 0.0, 1.0)
-            child2 = np.clip(child2, 0.0, 1.0)
-            
-            offspring1.append(child1)
-            offspring2.append(child2)
-        
-        return offspring1, offspring2
-    
-    # --- Selection --- #
-    def select_parents(self, population: list[list[np.ndarray]], fitness_scores: list[float]) -> tuple[list[np.ndarray], list[np.ndarray]]:
+    def select_parents(self, population: list[Genotype], fitness_scores: list[float]) -> tuple[Genotype, Genotype]:
         """
         Select two parents from the population based on the specified selection method.
         Excludes individuals with fitness = -100 (failed simulations) from selection.
@@ -240,7 +196,7 @@ class evolutionary_algorithm:
         else:
             raise ValueError(f"Unknown selection method: {self.selection}")
     
-    def _tournament_selection(self, population: list[list[np.ndarray]], fitness_scores: list[float]) -> list[np.ndarray]:
+    def _tournament_selection(self, population: list[Genotype], fitness_scores: list[float]) -> Genotype:
         """
         Tournament selection: Pick the best individual from a random tournament.
         
@@ -265,7 +221,7 @@ class evolutionary_algorithm:
         
         return population[best_index]
     
-    def _roulette_selection(self, population: list[list[np.ndarray]], fitness_scores: list[float]) -> list[np.ndarray]:
+    def _roulette_selection(self, population: list[Genotype], fitness_scores: list[float]) -> Genotype:
         """
         Roulette wheel selection: Select individuals proportional to their fitness.
         Uses rank-based selection to handle negative fitness values while preserving original fitness.
@@ -293,40 +249,32 @@ class evolutionary_algorithm:
         selected_index = RNG.choice(len(population), p=probabilities)
         return population[selected_index]
     
-    def evaluate_population(self, population: list[np.ndarray]) -> list[float]:
-        ctx = mp.get_context("spawn")
-        cpu_count = mp.cpu_count()
-
-        with ctx.Pool(cpu_count) as pool:
-            fitness_scores = pool.map(self.eval_func, population)
+    def evaluate_population(self, population: list[Genotype]) -> list[float]:
+        fitness_scores = []
+        for genotype in population:
+            fitness = self._eval_func(genotype)
+            fitness_scores.append(fitness)
         return fitness_scores
 
-    def eval_func(self, genotype: np.ndarray) -> Any:
-        robot = Robot(genotype)
-        robot.graph
-        return self.evaluator(robot)
+    def _eval_func(self, genotype: Genotype) -> float:
+        ea = MindEA(
+            Robot(genotype),
+            population_size=50,
+            generations=10,
+            mutation_rate=0.5,
+            crossover_rate=0.5,
+            crossover_type="blend",
+            elitism=5,
+            selection='tournament',
+            tournament_size=3
+        )
+        _, weights, _ = ea.run()
+        return max(weights)
 
-    # --- Population Management --- #
-    def create_initial_population(self) -> list[list[np.ndarray]]:
-        """
-        Create the initial population of random genotypes.
-        
-        Returns:
-            List of random genotypes
-        """
+    def create_initial_population(self) -> list[Genotype]:
         return [self.random_genotype() for _ in range(self.population_size)]
     
-    def apply_elitism(self, population: list[list[np.ndarray]], fitness_scores: list[float]) -> list[list[np.ndarray]]:
-        """
-        Select the best individuals to carry over to the next generation.
-        
-        Args:
-            population: Current population
-            fitness_scores: Fitness scores for current population
-            
-        Returns:
-            Elite individuals to preserve
-        """
+    def apply_elitism(self, population: list[Genotype], fitness_scores: list[float]) -> list[Genotype]:
         if self.elitism <= 0:
             return []
         
@@ -336,8 +284,7 @@ class evolutionary_algorithm:
         
         return elite_individuals
     
-    # --- Main Evolution Loop --- #
-    def run(self) -> tuple[list[np.ndarray], list[float], list[float]]:
+    def run(self) -> tuple[Genotype, list[float], list[float]]:
         """
         Run the evolutionary algorithm.
         
@@ -385,8 +332,8 @@ class evolutionary_algorithm:
                     child1, child2 = [gene.copy() for gene in parent1], [gene.copy() for gene in parent2]
                 
                 # Apply mutation
-                child1 = self.mutate(child1)
-                child2 = self.mutate(child2)
+                child1 = self.mutate.gaussian(child1)
+                child2 = self.mutate.gaussian(child2)
                 
                 # Add to new population (check size to avoid exceeding population_size)
                 new_population.append(child1)
@@ -402,5 +349,4 @@ class evolutionary_algorithm:
         best_individual = population[best_index]
         
         return best_individual, best_fitness_history, average_fitness_history
-        
-        
+              
