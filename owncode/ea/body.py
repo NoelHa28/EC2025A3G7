@@ -1,4 +1,6 @@
 from opposites import has_core_opposite_pair, simple_symmetry_score
+from evaluate import STOCHASTIC_SPAWN_POSITIONS, set_spawn_position
+
 KILL_FITNESS = -100.0  # you already filter this out in selection
 
 
@@ -301,8 +303,8 @@ class BodyEA:
         score = simple_symmetry_score(G, max_depth=3)
 
         # Probabilistic kill: worse symmetry -> higher chance to cull
-        threshold = 0.6   # raise to be stricter (e.g., 0.7)
-        softness  = 0.3   # raise to soften ramp (e.g., 0.4)
+        threshold = 0.6  # raise to be stricter (e.g., 0.7)
+        softness = 0.3  # raise to soften ramp (e.g., 0.4)
         p_kill = max(0.0, min(1.0, (threshold - score) / max(softness, 1e-6)))
 
         # Quick debug line
@@ -327,7 +329,7 @@ class BodyEA:
         _, weights, _ = ea.run()
         return float(max(weights))
 
-    #def _eval_func(self, genotype: Genotype) -> float:
+        # def _eval_func(self, genotype: Genotype) -> float:
         ea = MindEA(
             robot=Robot(genotype),
             population_size=20,
@@ -374,6 +376,11 @@ class BodyEA:
 
         for generation in range(self.generations):
             print(f"Generation {generation+1}/{self.generations}")
+            current_spawn = STOCHASTIC_SPAWN_POSITIONS[
+                generation % len(STOCHASTIC_SPAWN_POSITIONS)
+            ]
+            set_spawn_position(current_spawn)
+            print(f"[GEN {generation+1}] using spawn {current_spawn}", flush=True)
             # Evaluate population
             fitness_scores = self.evaluate_population(population)
 

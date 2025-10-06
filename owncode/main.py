@@ -38,7 +38,6 @@ DATA = CWD / "__data__" / SCRIPT_NAME
 DATA.mkdir(exist_ok=True)
 
 # Global variables
-SPAWN_POS = [-0.8, 0, 0.1]
 NUM_OF_MODULES = 30
 
 
@@ -82,8 +81,8 @@ def main() -> None:
 
     # Evolutionary algorithm parameters
     genotype_size = 64
-    population_size = 20  # Smaller population for faster testing
-    generations = 1     # More generations for better evolution
+    population_size = 1  # Smaller population for faster testing
+    generations = 4     # More generations for better evolution
     
     # Create evolutionary algorithm
     ea = BodyEA(

@@ -24,7 +24,9 @@ DATA = CWD / "__data__" / SCRIPT_NAME
 DATA.mkdir(exist_ok=True)
 
 # Global variables
+
 SPAWN_POS = [-0.8, 0, 0.1]
+
 
 def experiment(
     robot: Robot,
@@ -32,6 +34,7 @@ def experiment(
     controller: Controller,
     duration: int = 40,
     mode: ViewerTypes = "viewer",
+    spawn_pos: list[float] | None = None,
 ) -> None:
     """Run the simulation with random movements."""
     # ==================================================================== #
@@ -45,7 +48,7 @@ def experiment(
     # Spawn robot in the world
     # Check docstring for spawn conditions
     # CRITICAL FIX: Pass a copy of SPAWN_POS to prevent in-place modification!
-    world.spawn(core.spec, spawn_position=SPAWN_POS.copy())
+    world.spawn(core.spec, spawn_position=(spawn_pos or SPAWN_POS).copy())
 
     # Generate the model and data
     # These are standard parts of the simulation USE THEM AS IS, DO NOT CHANGE
@@ -107,4 +110,3 @@ def experiment(
                 data=data,
             )
     # ==================================================================== #
-
