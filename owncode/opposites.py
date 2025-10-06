@@ -33,3 +33,46 @@ def has_core_opposite_pair(G: nx.DiGraph) -> bool:
 def print_core_faces(G: nx.DiGraph) -> None:
     c = _find_core(G)
     print(f"Core node: {c} | faces out: {faces_directly_from_core(G)}")
+
+from collections import deque
+
+def _subtree_size(G, roots, max_depth=3):
+    """Count nodes in subtrees rooted at `roots` up to `max_depth`."""
+    seen = set()
+    q = deque((r, 0) for r in roots)
+    total = 0
+    while q:
+        u, d = q.popleft()
+        if u in seen:
+            continue
+        seen.add(u)
+        total += 1
+        if max_depth is None or d < max_depth:
+            for v in G.successors(u):
+                q.append((v, d + 1))
+    return total
+
+def simple_symmetry_score(G, max_depth=3) -> float:
+    """
+    0..1 score. For each axis (L-R, F-B, T-Bot) we compare subtree sizes
+    hanging from the core. Perfectly balanced axis -> score ~1, one-sided -> 0.
+    """
+    c = _find_core(G)
+    faces = {}
+    for ch in G.successors(c):
+        f = str(G[c][ch].get("face", "")).upper()
+        if f:
+            faces.setdefault(f, []).append(ch)
+
+    axes = [("LEFT","RIGHT"), ("FRONT","BACK"), ("TOP","BOTTOM")]
+    num, den = 0.0, 0.0
+    for A, B in axes:
+        LA = _subtree_size(G, faces.get(A, []), max_depth=max_depth)
+        RB = _subtree_size(G, faces.get(B, []), max_depth=max_depth)
+        w = LA + RB
+        if w == 0:
+            continue
+        axis_score = 1.0 - abs(LA - RB) / w  # 1 if balanced, 0 if all on one side
+        num += axis_score * w
+        den += w
+    return 0.0 if den == 0 else float(num / den)

@@ -1,3 +1,7 @@
+from opposites import has_core_opposite_pair, simple_symmetry_score
+KILL_FITNESS = -100.0  # you already filter this out in selection
+
+
 from typing import Any
 from collections.abc import Callable
 import multiprocessing as mp
@@ -280,6 +284,50 @@ class BodyEA:
         return fitness_scores
 
     def _eval_func(self, genotype: Genotype) -> float:
+        # Build morphology
+        try:
+            robot = Robot(genotype)
+        except RuntimeError:
+            return KILL_FITNESS  # e.g., no hinges
+
+        G = robot.graph
+
+        # Cheap hard gate (optional, keeps cost low)
+        if not has_core_opposite_pair(G):
+            print("KILL (no opposite pair on core)")
+            return KILL_FITNESS
+
+        # Simple whole-body symmetry score (0..1)
+        score = simple_symmetry_score(G, max_depth=3)
+
+        # Probabilistic kill: worse symmetry -> higher chance to cull
+        threshold = 0.6   # raise to be stricter (e.g., 0.7)
+        softness  = 0.3   # raise to soften ramp (e.g., 0.4)
+        p_kill = max(0.0, min(1.0, (threshold - score) / max(softness, 1e-6)))
+
+        # Quick debug line
+        print(f"sym={score:.3f}  p_kill={p_kill:.2f}")
+
+        if RNG.random() < p_kill:
+            print("KILL (probabilistic)")
+            return KILL_FITNESS
+
+        # Survives -> evaluate brain as before
+        ea = MindEA(
+            robot=robot,
+            population_size=20,
+            generations=1,
+            mutation_rate=0.5,
+            crossover_rate=0.0,
+            crossover_type="onepoint",
+            elitism=50,
+            selection="tournament",
+            tournament_size=5,
+        )
+        _, weights, _ = ea.run()
+        return float(max(weights))
+
+    #def _eval_func(self, genotype: Genotype) -> float:
         ea = MindEA(
             robot=Robot(genotype),
             population_size=20,
