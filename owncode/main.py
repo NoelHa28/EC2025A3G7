@@ -86,7 +86,7 @@ def main() -> None:
     # Evolutionary algorithm parameters
     genotype_size = 64
     population_size = 20  # Smaller population for faster testing
-    generations = 10     # More generations for better evolution
+    generations = 1     # More generations for better evolution
     
     # Create evolutionary algorithm
     ea = BodyEA(

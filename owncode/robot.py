@@ -1,9 +1,11 @@
 import numpy as np
 from pathlib import Path
+from opposites import _find_core, faces_directly_from_core, print_core_faces, has_core_opposite_pair
 
 from ariel.body_phenotypes.robogen_lite.decoders.hi_prob_decoding import (
     HighProbabilityDecoder,
     save_graph_as_json,
+    draw_graph
 )
 
 from nde import NeuralDevelopmentalEncodingWithLoading
@@ -32,6 +34,7 @@ class Robot:
         HPD = HighProbabilityDecoder(NUM_OF_MODULES)
 
         self.graph = HPD.probability_matrices_to_graph(*NDE.forward(self.body_genotype))
+        draw_graph(self.graph)
         self._number_of_hinges = sum(1 for n in self.graph.nodes if self.graph.nodes[n]["type"] == "HINGE")
         if self._number_of_hinges == 0:
             raise RuntimeError("No hinges in the robot, cannot build brain.")
@@ -40,6 +43,11 @@ class Robot:
 
         if self.mind_genotype is not None:
             self.brain.set_genotype(self.mind_genotype)
+
+        faces_directly_from_core(self.graph)
+        print_core_faces(self.graph)
+        print(has_core_opposite_pair(self.graph))
+        
     
     def save(self) -> None:
         save_graph_as_json(self.graph, DATA / "best_robot_graph.json")
