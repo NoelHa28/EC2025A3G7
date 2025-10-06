@@ -19,11 +19,13 @@ from visualise import plot_evolution_progress, show_xpos_history
 from simulate import experiment
 from evaluate import evaluate
 import controller
+import random
+
 
 # Type Aliases
 type ViewerTypes = Literal["launcher", "video", "simple", "no_control", "frame"]
 
-# --- RANDOM GENERATOR SETUP --- #
+# ---so  RANDOM GENERATOR SETUP --- #
 SEED = 42
 RNG = np.random.default_rng(SEED)
 np.random.seed(SEED)
@@ -38,6 +40,7 @@ DATA.mkdir(exist_ok=True)
 # Global variables
 SPAWN_POS = [-0.8, 0, 0.1]
 NUM_OF_MODULES = 30
+
 
 def simulate_best_robot(best_robot: Robot, mode: ViewerTypes = "launcher") -> None:
     """Simulate the best evolved robot."""
@@ -62,13 +65,7 @@ def simulate_best_robot(best_robot: Robot, mode: ViewerTypes = "launcher") -> No
     )
 
     # Run simulation with visualization
-    experiment(
-        robot=best_robot,
-        core=core,
-        controller=ctrl,
-        mode=mode,
-        duration=120
-    )
+    experiment(robot=best_robot, core=core, controller=ctrl, mode=mode, duration=120)
 
     # Show trajectory
     if tracker.history["xpos"] and len(tracker.history["xpos"][0]) > 0:
@@ -82,7 +79,7 @@ def simulate_best_robot(best_robot: Robot, mode: ViewerTypes = "launcher") -> No
 def main() -> None:
     """Entry point - Run evolutionary algorithm to evolve robots."""
     console.log("Starting robot evolution...")
-    
+
     # Evolutionary algorithm parameters
     genotype_size = 64
     population_size = 20  # Smaller population for faster testing
@@ -94,31 +91,31 @@ def main() -> None:
         generations=generations,
         genotype_size=genotype_size,
         evaluator=evaluate,
-        mutation_rate=0.5,     # Lower mutation rate to preserve good solutions
-        crossover_rate=0.0,     # Higher crossover rate
+        mutation_rate=0.5,  # Lower mutation rate to preserve good solutions
+        crossover_rate=0.0,  # Higher crossover rate
         crossover_type="uniform",  # Good for real-valued genes
-        elitism=2,              # Keep 2 best individuals (10% of population)
+        elitism=2,  # Keep 2 best individuals (10% of population)
         selection="tournament",  # Tournament selection
-        tournament_size=3
+        tournament_size=3,
     )
-    
+
     console.log(f"Population size: {population_size}")
     console.log(f"Generations: {generations}")
     console.log(f"Selection: {ea.selection}")
     console.log(f"Crossover: {ea.crossover.crossover_type}")
-    
+
     # Run evolution
     console.log("Evolution started...")
     best_genes, best_fitness_history, avg_fitness_history = ea.run()
     best_robot = Robot(best_genes)
-    
+
     # Show evolution progress
     console.log("Evolution completed!")
     console.log(f"Best fitness achieved: {max(best_fitness_history):.4f}")
-    
+
     # Plot evolution progress
     plot_evolution_progress(best_fitness_history, avg_fitness_history)
-    
+
     # Simulate and visualize the best robot
     simulate_best_robot(best_robot, mode="video")
 
@@ -126,7 +123,7 @@ def main() -> None:
 def main_single_robot() -> None:
     """Original main function - test a single random robot."""
     console.log("Testing single random robot...")
-    
+
     # ? ------------------------------------------------------------------ #
     genotype_size = 64
 
@@ -139,6 +136,7 @@ def main_single_robot() -> None:
     robot = Robot(genotype)
     simulate_best_robot(robot)
 
+
 if __name__ == "__main__":
     main()
-    # main_single_robot()
+    #main_single_robot()
