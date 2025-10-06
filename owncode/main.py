@@ -20,7 +20,7 @@ from simulate import experiment
 from evaluate import evaluate
 import controller
 import random
-from non_learners import RandomMovesGate, ViabilityConfig
+
 
 # Type Aliases
 type ViewerTypes = Literal["launcher", "video", "simple", "no_control", "frame"]
@@ -64,9 +64,6 @@ def simulate_best_robot(best_robot: Robot, mode: ViewerTypes = "launcher") -> No
         tracker=tracker,
     )
 
-    # setup viability checker
-    gate = RandomMovesGate(ViabilityConfig())
-
     # Run simulation with visualization
     experiment(robot=best_robot, core=core, controller=ctrl, mode=mode, duration=120)
 
@@ -100,8 +97,6 @@ def main() -> None:
         elitism=2,  # Keep 2 best individuals (10% of population)
         selection="tournament",  # Tournament selection
         tournament_size=3,
-        viability_checker=RandomMovesGate.is_viable,
-        viability_attempts_per_slot=5,
     )
 
     console.log(f"Population size: {population_size}")

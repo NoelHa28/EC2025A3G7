@@ -133,8 +133,6 @@ class BodyEA:
         elitism: int = 1,
         selection: str = "tournament",
         tournament_size: int = 3,
-        viability_checker: Callable | None = None,
-        viability_attempts_per_slot: int = 5,
     ) -> None:
         """
         Simple evolutionary algorithm implementation.
@@ -161,8 +159,6 @@ class BodyEA:
         self.elitism = elitism
         self.selection = selection
         self.tournament_size = tournament_size
-        self.viability_checker = viability_checker
-        self.viability_attempts_per_slot = viability_attempts_per_slot
 
     def random_genotype(self) -> Genotype:
         """Generate a random genotype."""
