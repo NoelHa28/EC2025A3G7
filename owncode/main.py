@@ -81,8 +81,8 @@ def main() -> None:
 
     # Body evolution parameters
     body_params = {
-        'population_size': 10,  # Smaller population for faster testing
-        'generations': 5,       # More generations for better evolution
+        'population_size': 1,  # Smaller population for faster testing
+        'generations': 4,       # More generations for better evolution
         'genotype_size': 64,
         'mutation_rate': 0.5,   # Lower mutation rate to preserve good solutions
         'crossover_rate': 0.0,  # Higher crossover rate
@@ -90,6 +90,7 @@ def main() -> None:
         'elitism': 2,           # Keep 2 best individuals (10% of population)
         'selection': 'tournament',  # Tournament selection
         'tournament_size': 3,
+        'dynamic_duratio': True,  # Enable dynamic duration
     }
     
     # Mind evolution parameters

@@ -3,6 +3,7 @@ import os
 import sys
 import numpy as np
 import multi_spawn as ms
+import dynamic_duration as dd
 from robot import Robot
 import mujoco as mj
 
@@ -51,7 +52,7 @@ def evaluate(robot: Robot, spawn: list[float] | None = None) -> float:
             core=core,
             controller=ctrl,
             mode="simple",
-            duration=10,
+            duration=dd.get_current_duration(),
             spawn_pos=spawn,
         )
 

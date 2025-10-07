@@ -1,5 +1,6 @@
 from opposites import has_core_opposite_pair, simple_symmetry_score
 import multi_spawn as ms
+import dynamic_duration as dd
 from .mind import MindEA
 from typing import Any
 from collections.abc import Callable
@@ -12,7 +13,6 @@ from ariel import console
 SEED = 42
 RNG = np.random.default_rng(SEED)
 KILL_FITNESS = -100.0  # you already filter this out in selection
-
 
 
 type Genotype = list[np.ndarray]
@@ -137,34 +137,39 @@ class BodyEA:
 
         Args:
             body_params (dict): Parameters for the body evolution algorithm.
-                Expected keys: population_size, generations, genotype_size, 
-                mutation_rate, crossover_rate, crossover_type, elitism, 
+                Expected keys: population_size, generations, genotype_size,
+                mutation_rate, crossover_rate, crossover_type, elitism,
                 selection, tournament_size
             mind_params (dict): Parameters for the mind evolution algorithm.
-                Expected keys: population_size, generations, mutation_rate, 
+                Expected keys: population_size, generations, mutation_rate,
                 crossover_rate, crossover_type, elitism, selection, tournament_size
             evaluator (callable): Function to evaluate the fitness of an individual.
         """
         # Extract body parameters with defaults
-        self.population_size = body_params.get('population_size', 20)
-        self.generations = body_params.get('generations', 10)
-        self.genotype_size = body_params.get('genotype_size', 100)
+        self.population_size = body_params.get("population_size", 20)
+        self.generations = body_params.get("generations", 10)
+        self.genotype_size = body_params.get("genotype_size", 100)
         self.evaluator = evaluator  # Function to evaluate fitness
-        
+
         # Body EA specific parameters
-        mutation_rate = body_params.get('mutation_rate', 0.1)
-        crossover_type = body_params.get('crossover_type', 'onepoint')
-        self.crossover_rate = body_params.get('crossover_rate', 0.7)
-        self.elitism = body_params.get('elitism', 1)
-        self.selection = body_params.get('selection', 'tournament')
-        self.tournament_size = body_params.get('tournament_size', 3)
-        
+        mutation_rate = body_params.get("mutation_rate", 0.1)
+        crossover_type = body_params.get("crossover_type", "onepoint")
+        self.crossover_rate = body_params.get("crossover_rate", 0.7)
+        self.elitism = body_params.get("elitism", 1)
+        self.selection = body_params.get("selection", "tournament")
+        self.tournament_size = body_params.get("tournament_size", 3)
+
         # Initialize mutation and crossover operators
         self.mutate = Mutate(mutation_rate)
         self.crossover = Crossover(crossover_type)
-        
+
         # Store mind parameters for use in _eval_func
         self.mind_params = mind_params
+
+        self.best_so_far: float | None = None  # Track best fitness so far
+        self.dynamic_duration_enabled: bool = body_params.get(
+            "dynamic_duration", True
+        )  # expose a knob
 
     def random_genotype(self) -> Genotype:
         """Generate a random genotype."""
@@ -288,18 +293,18 @@ class BodyEA:
 
     def _eval_func(self, genotype: Genotype) -> float:
         robot = Robot(genotype)
-        
+
         # Use mind_params for MindEA configuration
         ea = MindEA(
             robot=robot,
-            population_size=self.mind_params.get('population_size', 10),
-            generations=self.mind_params.get('generations', 1),
-            mutation_rate=self.mind_params.get('mutation_rate', 0.5),
-            crossover_rate=self.mind_params.get('crossover_rate', 0.0),
-            crossover_type=self.mind_params.get('crossover_type', 'onepoint'),
-            elitism=self.mind_params.get('elitism', 2),
-            selection=self.mind_params.get('selection', 'tournament'),
-            tournament_size=self.mind_params.get('tournament_size', 3),
+            population_size=self.mind_params.get("population_size", 10),
+            generations=self.mind_params.get("generations", 1),
+            mutation_rate=self.mind_params.get("mutation_rate", 0.5),
+            crossover_rate=self.mind_params.get("crossover_rate", 0.0),
+            crossover_type=self.mind_params.get("crossover_type", "onepoint"),
+            elitism=self.mind_params.get("elitism", 2),
+            selection=self.mind_params.get("selection", "tournament"),
+            tournament_size=self.mind_params.get("tournament_size", 3),
         )
         _, weights, _ = ea.run()
         return float(max(weights))
@@ -314,13 +319,13 @@ class BodyEA:
             else:
                 killed += 1
 
-        console.log(f"Initial population: {self.population_size} viable, {killed} killed")
+        console.log(
+            f"Initial population: {self.population_size} viable, {killed} killed"
+        )
         return population
-    
+
     def apply_elitism(
-        self,
-        population: list[Genotype],
-        fitness_scores: list[float]
+        self, population: list[Genotype], fitness_scores: list[float]
     ) -> list[Genotype]:
         if self.elitism <= 0:
             return []
@@ -346,9 +351,12 @@ class BodyEA:
         average_fitness_history = []
 
         for generation in range(self.generations):
-           # choose and store the generation’s spawn (respects MULTISPAWN_ENABLED)
+            # choose and store the generation’s spawn (respects MULTISPAWN_ENABLED)
             ms.set_current_spawn(ms.MULTISPAWN_ENABLED)
-            print(f"[GEN {generation+1}] using spawn {ms.CURRENT_SPAWN}", flush=True)
+
+            # set duration for THIS generation using best_so_far (from previous gens)
+            dur = dd.update_for_generation(self.best_so_far, ms.CURRENT_SPAWN)
+            print(f"[GEN {generation+1}] spawn={ms.CURRENT_SPAWN}, duration={dur}s")
 
             # Evaluate population
             fitness_scores = self.evaluate_population(population)
@@ -358,7 +366,11 @@ class BodyEA:
             average_fitness = sum(fitness_scores) / len(fitness_scores)
             best_fitness_history.append(best_fitness)
             average_fitness_history.append(average_fitness)
-
+            self.best_so_far = (
+                best_fitness
+                if (self.best_so_far is None)
+                else max(self.best_so_far, best_fitness)
+            )
             # Print progress
             if generation % 10 == 0 or generation == self.generations - 1:
                 print(
@@ -404,7 +416,7 @@ class BodyEA:
                 new_population.append(child1)
                 if len(new_population) < self.population_size:
                     new_population.append(child2)
-                
+
                 child1, child2 = None, None  # Reset for next pair
 
             # Update population
