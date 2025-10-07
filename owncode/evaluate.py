@@ -100,8 +100,8 @@ def evaluate(robot: Robot, spawn=None) -> float:
         if np.any(~np.isfinite(traj)):
             return -100
 
-        # Explosion: robot goes absurdly far away
-        if np.max(np.abs(traj)) > 1000:
+        # Robot shouldn't learn to fall
+        if np.isclose(traj[5], traj[-1], atol=0.02):
             return -100
 
         # Otherwise compute normal fitness
