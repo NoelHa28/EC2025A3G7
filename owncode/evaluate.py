@@ -21,13 +21,12 @@ from simulate import experiment
 import controller
 
 
-
-def evaluate(robot: Robot, spawn: list[float] | None=None) -> float:
+def evaluate(robot: Robot, spawn: list[float] | None = None) -> float:
     """
     Evaluate a robot genotype by simulating it and returning fitness.
     Handles invalid or unstable robots safely.
     """
-    spawn = spawn or ms.CURRENT_SPAWN or ms.DEFAULT_SPAWN
+    spawn = spawn or ms.current_or_env_default()
 
     try:
         mj.set_mjcb_control(None)  # reset MuJoCo state
@@ -53,7 +52,8 @@ def evaluate(robot: Robot, spawn: list[float] | None=None) -> float:
             controller=ctrl,
             mode="simple",
             duration=10,
-            spawn_pos=spawn)
+            spawn_pos=spawn,
+        )
 
         # --- SAFETY CHECKS ---
         # No trajectory recorded
@@ -67,7 +67,10 @@ def evaluate(robot: Robot, spawn: list[float] | None=None) -> float:
             return -100
 
         # Robot shouldn't learn to fall
-        if all(np.isclose(start_cord, end_cord, atol=0.02) for start_cord, end_cord in zip(traj[5], traj[-1])):
+        if all(
+            np.isclose(start_cord, end_cord, atol=0.02)
+            for start_cord, end_cord in zip(traj[5], traj[-1])
+        ):
             return -100
 
         # Otherwise compute normal fitness
