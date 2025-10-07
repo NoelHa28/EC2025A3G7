@@ -10,6 +10,8 @@ import multiprocessing as mp
 
 import numpy as np
 from robot import Robot
+from morphology_constraints import is_robot_viable
+from ariel import console
 
 SEED = 42
 RNG = np.random.default_rng(SEED)
@@ -286,38 +288,11 @@ class BodyEA:
         return fitness_scores
 
     def _eval_func(self, genotype: Genotype) -> float:
-        # Build morphology
-        try:
-            robot = Robot(genotype)
-        except RuntimeError:
-            return KILL_FITNESS  # e.g., no hinges
-
-        G = robot.graph
-
-        # Cheap hard gate (optional, keeps cost low)
-        if not has_core_opposite_pair(G):
-            print("KILL (no opposite pair on core)")
-            return KILL_FITNESS
-
-        # Simple whole-body symmetry score (0..1)
-        score = simple_symmetry_score(G, max_depth=3)
-
-        # Probabilistic kill: worse symmetry -> higher chance to cull
-        threshold = 0.6  # raise to be stricter (e.g., 0.7)
-        softness = 0.3  # raise to soften ramp (e.g., 0.4)
-        p_kill = max(0.0, min(1.0, (threshold - score) / max(softness, 1e-6)))
-
-        # Quick debug line
-        print(f"sym={score:.3f}  p_kill={p_kill:.2f}")
-
-        if RNG.random() < p_kill:
-            print("KILL (probabilistic)")
-            return KILL_FITNESS
-
-        # Survives -> evaluate brain as before
+        robot = Robot(genotype)
+        
         ea = MindEA(
             robot=robot,
-            population_size=20,
+            population_size=10,
             generations=1,
             mutation_rate=0.5,
             crossover_rate=0.0,
@@ -330,10 +305,22 @@ class BodyEA:
         return float(max(weights))
 
     def create_initial_population(self) -> list[Genotype]:
-        return [self.random_genotype() for _ in range(self.population_size)]
+        population = []
+        killed = 0
+        while len(population) < self.population_size:
+            genotype = self.random_genotype()
+            if is_robot_viable(Robot(genotype)):
+                population.append(genotype)
+            else:
+                killed += 1
 
+        console.log(f"Initial population: {self.population_size} viable, {killed} killed")
+        return population
+    
     def apply_elitism(
-        self, population: list[Genotype], fitness_scores: list[float]
+        self,
+        population: list[Genotype],
+        fitness_scores: list[float]
     ) -> list[Genotype]:
         if self.elitism <= 0:
             return []
@@ -386,6 +373,8 @@ class BodyEA:
             # Create new population
             new_population = elite_individuals.copy()
 
+            child1, child2 = None, None
+
             # Fill rest of population with offspring
             while len(new_population) < self.population_size:
                 # Select parents
@@ -393,21 +382,32 @@ class BodyEA:
 
                 # Apply crossover
                 if RNG.random() < self.crossover_rate:
-                    child1, child2 = self.crossover(parent1, parent2)
+                    offspring1, offspring2 = self.crossover(parent1, parent2)
                 else:
                     # If no crossover, children are copies of parents
-                    child1, child2 = [gene.copy() for gene in parent1], [
+                    offspring1, offspring2 = [gene.copy() for gene in parent1], [
                         gene.copy() for gene in parent2
                     ]
 
                 # Apply mutation
-                child1 = self.mutate.gaussian(child1)
-                child2 = self.mutate.gaussian(child2)
+                offspring1 = self.mutate.gaussian(offspring1)
+                offspring2 = self.mutate.gaussian(offspring2)
+
+                if child1 is None and is_robot_viable(Robot(offspring1)):
+                    child1 = offspring1
+
+                if child2 is None and is_robot_viable(Robot(offspring2)):
+                    child2 = offspring2
+
+                if child1 is None or child2 is None:
+                    continue  # Retry if either child is not viable
 
                 # Add to new population (check size to avoid exceeding population_size)
                 new_population.append(child1)
                 if len(new_population) < self.population_size:
                     new_population.append(child2)
+                
+                child1, child2 = None, None  # Reset for next pair
 
             # Update population
             population = new_population

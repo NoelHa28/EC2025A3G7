@@ -1,6 +1,6 @@
 import numpy as np
 
-TARGET_POSITION = [-0.8, -6, 0.5]
+TARGET_POSITION = [5, 0, 0.5]
 
 def fitness(history: list[tuple[float, float, float]]) -> float:
     xt, yt, zt = TARGET_POSITION

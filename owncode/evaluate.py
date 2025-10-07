@@ -22,10 +22,14 @@ import controller
 SEED = 42
 RNG = np.random.default_rng(SEED)
 
+# STOCHASTIC_SPAWN_POSITIONS = [
+#     [-0.8, 0, 0.1], # starting position
+#     [0.7, 0, 0.1],  # rugged terrain
+#     [2.5, 0, 0.1],  # uphill
+# ]
+
 STOCHASTIC_SPAWN_POSITIONS = [
     [-0.8, 0, 0.1], # starting position
-    [0.7, 0, 0.1],  # rugged terrain
-    [2.5, 0, 0.1],  # uphill
 ]
 CURRENT_SPAWN: list[float] | None = None
 
