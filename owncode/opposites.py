@@ -36,7 +36,7 @@ def print_core_faces(G: nx.DiGraph) -> None:
 
 from collections import deque
 
-def _subtree_size(G, roots, max_depth=3):
+def _subtree_size(G: nx.DiGraph, roots, max_depth=3):
     """Count nodes in subtrees rooted at `roots` up to `max_depth`."""
     seen = set()
     q = deque((r, 0) for r in roots)
@@ -52,7 +52,7 @@ def _subtree_size(G, roots, max_depth=3):
                 q.append((v, d + 1))
     return total
 
-def simple_symmetry_score(G, max_depth=3) -> float:
+def simple_symmetry_score(G: nx.DiGraph, max_depth=3) -> float:
     """
     0..1 score. For each axis (L-R, F-B, T-Bot) we compare subtree sizes
     hanging from the core. Perfectly balanced axis -> score ~1, one-sided -> 0.

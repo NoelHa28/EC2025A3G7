@@ -34,18 +34,11 @@ class Robot:
         HPD = HighProbabilityDecoder(NUM_OF_MODULES)
 
         self.graph = HPD.probability_matrices_to_graph(*NDE.forward(self.body_genotype))
-        #draw_graph(self.graph)
         self._number_of_hinges = sum(1 for n in self.graph.nodes if self.graph.nodes[n]["type"] == "HINGE")
-        if self._number_of_hinges == 0:
-            raise RuntimeError("No hinges in the robot, cannot build brain.")
-        
         self.brain = EvolvableCPG(self._number_of_hinges)
 
         if self.mind_genotype is not None:
             self.brain.set_genotype(self.mind_genotype)
-
-        #print_core_faces(self.graph)
-        #print(has_core_opposite_pair(self.graph))
         
     
     def save(self) -> None:
