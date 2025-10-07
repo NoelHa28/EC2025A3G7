@@ -1,13 +1,9 @@
 from opposites import has_core_opposite_pair, simple_symmetry_score
-from evaluate import STOCHASTIC_SPAWN_POSITIONS, set_spawn_position
-
-KILL_FITNESS = -100.0  # you already filter this out in selection
-
-
+import multi_spawn as ms
+from .mind import MindEA
 from typing import Any
 from collections.abc import Callable
 import multiprocessing as mp
-
 import numpy as np
 from robot import Robot
 from morphology_constraints import is_robot_viable
@@ -15,8 +11,9 @@ from ariel import console
 
 SEED = 42
 RNG = np.random.default_rng(SEED)
+KILL_FITNESS = -100.0  # you already filter this out in selection
 
-from .mind import MindEA
+
 
 type Genotype = list[np.ndarray]
 
@@ -286,6 +283,7 @@ class BodyEA:
         for genotype in population:
             fitness = self._eval_func(genotype)
             fitness_scores.append(fitness)
+
         return fitness_scores
 
     def _eval_func(self, genotype: Genotype) -> float:
@@ -348,12 +346,10 @@ class BodyEA:
         average_fitness_history = []
 
         for generation in range(self.generations):
-            print(f"Generation {generation+1}/{self.generations}")
-            current_spawn = STOCHASTIC_SPAWN_POSITIONS[
-                generation % len(STOCHASTIC_SPAWN_POSITIONS)
-            ]
-            set_spawn_position(current_spawn)
-            print(f"[GEN {generation+1}] using spawn {current_spawn}", flush=True)
+           # choose and store the generation’s spawn (respects MULTISPAWN_ENABLED)
+            ms.set_current_spawn(ms.MULTISPAWN_ENABLED)
+            print(f"[GEN {generation+1}] using spawn {ms.CURRENT_SPAWN}", flush=True)
+
             # Evaluate population
             fitness_scores = self.evaluate_population(population)
 

@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import numpy as np
+import multi_spawn as ms
 from robot import Robot
 import mujoco as mj
 
@@ -19,46 +20,14 @@ from fitness_function import fitness
 from simulate import experiment
 import controller
 
-SEED = 42
-RNG = np.random.default_rng(SEED)
-
-# STOCHASTIC_SPAWN_POSITIONS = [
-#     [-0.8, 0, 0.1], # starting position
-#     [0.7, 0, 0.1],  # rugged terrain
-#     [2.5, 0, 0.1],  # uphill
-# ]
-
-STOCHASTIC_SPAWN_POSITIONS = [
-    [-0.8, 0, 0.1], # starting position
-]
-CURRENT_SPAWN: list[float] | None = None
-
-def set_spawn_position(spawn: list[float]) -> None:
-    """Set the global spawn position for evaluation."""
-    global CURRENT_SPAWN
-    CURRENT_SPAWN = spawn
-    os.environ["A3_SPAWN"] = json.dumps(spawn) # For subprocesses
 
 
-def evaluate(robot: Robot, spawn=None) -> float:
+def evaluate(robot: Robot, spawn: list[float] | None=None) -> float:
     """
     Evaluate a robot genotype by simulating it and returning fitness.
     Handles invalid or unstable robots safely.
     """
-    if spawn is not None:
-        chosen_spawn = spawn
-    elif CURRENT_SPAWN is not None:
-        chosen_spawn = CURRENT_SPAWN
-    else:
-        # try env (for multiprocessing workers)
-        env_spawn = os.environ.get("A3_SPAWN")
-        if env_spawn:
-            try:
-                chosen_spawn = json.loads(env_spawn)
-            except Exception:
-                chosen_spawn = STOCHASTIC_SPAWN_POSITIONS[RNG.integers(0, len(STOCHASTIC_SPAWN_POSITIONS))]
-        else:
-            chosen_spawn = STOCHASTIC_SPAWN_POSITIONS[RNG.integers(0, len(STOCHASTIC_SPAWN_POSITIONS))]
+    spawn = spawn or ms.CURRENT_SPAWN or ms.DEFAULT_SPAWN
 
     try:
         mj.set_mjcb_control(None)  # reset MuJoCo state
@@ -77,8 +46,6 @@ def evaluate(robot: Robot, spawn=None) -> float:
             tracker=tracker,
         )
 
-        print(f"[EVAL] pid={os.getpid()} spawn_used={chosen_spawn}", flush=True)
-
         # Run simulation
         experiment(
             robot=robot,
@@ -86,8 +53,7 @@ def evaluate(robot: Robot, spawn=None) -> float:
             controller=ctrl,
             mode="simple",
             duration=10,
-            spawn_pos=chosen_spawn,
-        )
+            spawn_pos=spawn)
 
         # --- SAFETY CHECKS ---
         # No trajectory recorded
