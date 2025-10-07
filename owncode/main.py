@@ -79,27 +79,40 @@ def main() -> None:
     """Entry point - Run evolutionary algorithm to evolve robots."""
     console.log("Starting robot evolution...")
 
-    # Evolutionary algorithm parameters
-    genotype_size = 64
-    population_size = 10  # Smaller population for faster testing
-    generations = 5     # More generations for better evolution
+    # Body evolution parameters
+    body_params = {
+        'population_size': 10,  # Smaller population for faster testing
+        'generations': 5,       # More generations for better evolution
+        'genotype_size': 64,
+        'mutation_rate': 0.5,   # Lower mutation rate to preserve good solutions
+        'crossover_rate': 0.0,  # Higher crossover rate
+        'crossover_type': 'uniform',  # Good for real-valued genes
+        'elitism': 2,           # Keep 2 best individuals (10% of population)
+        'selection': 'tournament',  # Tournament selection
+        'tournament_size': 3,
+    }
+    
+    # Mind evolution parameters
+    mind_params = {
+        'population_size': 10,
+        'generations': 1,
+        'mutation_rate': 0.5,
+        'crossover_rate': 0.0,
+        'crossover_type': 'onepoint',
+        'elitism': 2,
+        'selection': 'tournament',
+        'tournament_size': 3,
+    }
     
     # Create evolutionary algorithm
     ea = BodyEA(
-        population_size=population_size,
-        generations=generations,
-        genotype_size=genotype_size,
+        body_params=body_params,
+        mind_params=mind_params,
         evaluator=evaluate,
-        mutation_rate=0.5,  # Lower mutation rate to preserve good solutions
-        crossover_rate=0.0,  # Higher crossover rate
-        crossover_type="uniform",  # Good for real-valued genes
-        elitism=2,  # Keep 2 best individuals (10% of population)
-        selection="tournament",  # Tournament selection
-        tournament_size=3,
     )
 
-    console.log(f"Population size: {population_size}")
-    console.log(f"Generations: {generations}")
+    console.log(f"Population size: {body_params['population_size']}")
+    console.log(f"Generations: {body_params['generations']}")
     console.log(f"Selection: {ea.selection}")
     console.log(f"Crossover: {ea.crossover.crossover_type}")
 

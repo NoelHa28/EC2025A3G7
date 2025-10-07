@@ -131,42 +131,43 @@ class Crossover:
 class BodyEA:
     def __init__(
         self,
-        population_size: int,
-        generations: int,
-        genotype_size: int,
-        evaluator: Callable[[Any], float],
-        mutation_rate: float = 0.1,
-        crossover_rate: float = 0.7,
-        crossover_type: str = "onepoint",
-        elitism: int = 1,
-        selection: str = "tournament",
-        tournament_size: int = 3,
+        body_params: dict,
+        mind_params: dict,
+        evaluator: Callable[[Any], float] = None,
     ) -> None:
         """
         Simple evolutionary algorithm implementation.
 
         Args:
-            population_size (int): Number of individuals in the population.
-            generations (int): Number of generations to run the algorithm.
-            genotype_size (int): Size of the genotype (number of genes).
+            body_params (dict): Parameters for the body evolution algorithm.
+                Expected keys: population_size, generations, genotype_size, 
+                mutation_rate, crossover_rate, crossover_type, elitism, 
+                selection, tournament_size
+            mind_params (dict): Parameters for the mind evolution algorithm.
+                Expected keys: population_size, generations, mutation_rate, 
+                crossover_rate, crossover_type, elitism, selection, tournament_size
             evaluator (callable): Function to evaluate the fitness of an individual.
-            mutation_rate (float): Probability of mutation for each gene.
-            crossover_rate (float): Probability of crossover between two parents.
-            crossover_type (str): Type of crossover ("onepoint", "uniform", or "blend").
-            elitism (int): Number of top individuals to carry over to the next generation.
-            selection (str): Selection method ("tournament" or "roulette").
-            tournament_size (int): Size of the tournament for tournament selection.
         """
-        self.population_size = population_size
-        self.generations = generations
-        self.genotype_size = genotype_size
+        # Extract body parameters with defaults
+        self.population_size = body_params.get('population_size', 20)
+        self.generations = body_params.get('generations', 10)
+        self.genotype_size = body_params.get('genotype_size', 100)
         self.evaluator = evaluator  # Function to evaluate fitness
+        
+        # Body EA specific parameters
+        mutation_rate = body_params.get('mutation_rate', 0.1)
+        crossover_type = body_params.get('crossover_type', 'onepoint')
+        self.crossover_rate = body_params.get('crossover_rate', 0.7)
+        self.elitism = body_params.get('elitism', 1)
+        self.selection = body_params.get('selection', 'tournament')
+        self.tournament_size = body_params.get('tournament_size', 3)
+        
+        # Initialize mutation and crossover operators
         self.mutate = Mutate(mutation_rate)
         self.crossover = Crossover(crossover_type)
-        self.crossover_rate = crossover_rate
-        self.elitism = elitism
-        self.selection = selection
-        self.tournament_size = tournament_size
+        
+        # Store mind parameters for use in _eval_func
+        self.mind_params = mind_params
 
     def random_genotype(self) -> Genotype:
         """Generate a random genotype."""
@@ -290,16 +291,17 @@ class BodyEA:
     def _eval_func(self, genotype: Genotype) -> float:
         robot = Robot(genotype)
         
+        # Use mind_params for MindEA configuration
         ea = MindEA(
             robot=robot,
-            population_size=10,
-            generations=1,
-            mutation_rate=0.5,
-            crossover_rate=0.0,
-            crossover_type="onepoint",
-            elitism=2,
-            selection="tournament",
-            tournament_size=3,
+            population_size=self.mind_params.get('population_size', 10),
+            generations=self.mind_params.get('generations', 1),
+            mutation_rate=self.mind_params.get('mutation_rate', 0.5),
+            crossover_rate=self.mind_params.get('crossover_rate', 0.0),
+            crossover_type=self.mind_params.get('crossover_type', 'onepoint'),
+            elitism=self.mind_params.get('elitism', 2),
+            selection=self.mind_params.get('selection', 'tournament'),
+            tournament_size=self.mind_params.get('tournament_size', 3),
         )
         _, weights, _ = ea.run()
         return float(max(weights))
