@@ -101,6 +101,12 @@ def is_valid_limb(G: nx.DiGraph, root: int, max_bricks_per_limb: int) -> bool:
         reasons.append("more than 4 BRICKs")
     if hinge_count < 2:
         reasons.append("fewer than 2 HINGEs")
+    # Brick nodes cannot be deeper than direct children of the core
+    core = _find_core(G)
+    direct_children = {v for _, v in G.out_edges(core)}
+    for n in nodes:
+        if node_type(G, n) == "BRICK" and n not in direct_children:
+            reasons.append(f"BRICK found deeper than allowed (node {n})")
 
     if reasons:
         # print(f"  -> INVALID limb: {', '.join(reasons)}")
