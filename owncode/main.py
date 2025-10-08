@@ -136,23 +136,20 @@ def main() -> None:
     # Simulate and visualize the best robot
     simulate_best_robot(best_robot, mode="video")
 
-
 def main_single_robot() -> None:
-    """Original main function - test a single random robot."""
-    console.log("Testing single random robot...")
-
-    # ? ------------------------------------------------------------------ #
     genotype_size = 64
 
-    robot = None
-    while robot is None or not is_robot_viable(robot):
-        genotype = [
-            RNG.random(genotype_size).astype(np.float32),
-            RNG.random(genotype_size).astype(np.float32),
-            RNG.random(genotype_size).astype(np.float32),
-        ]
+    genotype = [
+        RNG.random(genotype_size).astype(np.float32),
+        RNG.random(genotype_size).astype(np.float32),
+        RNG.random(genotype_size).astype(np.float32),
+    ]
 
-        robot = Robot(genotype)
+    robot = Robot(genotype)
+
+    print(robot.graph.out_edges(0, data=True))
+
+    draw_graph(robot.graph)
 
     simulate_best_robot(robot)
 
@@ -160,24 +157,23 @@ def main_single_robot() -> None:
 def run_mindEA() -> None:
 
     genotype_size = 64
-    robot = None
-    while robot is None or not is_robot_viable(robot):
-        genotype = [
-            RNG.random(genotype_size).astype(np.float32),
-            RNG.random(genotype_size).astype(np.float32),
-            RNG.random(genotype_size).astype(np.float32),
-        ]
 
-        robot = Robot(genotype)
+    genotype = [
+        RNG.random(genotype_size).astype(np.float32),
+        RNG.random(genotype_size).astype(np.float32),
+        RNG.random(genotype_size).astype(np.float32),
+    ]
+
+    robot = Robot(genotype)
 
     ea = MindEA(
         robot=robot,
-        population_size=20,
-        generations=5,
+        population_size=200,
+        generations=15,
         mutation_rate=0.5,
         crossover_rate=0.5,
         crossover_type="blend",
-        elitism=2,
+        elitism=20,
         selection="tournament",
         tournament_size=3,
     )

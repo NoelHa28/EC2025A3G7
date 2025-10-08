@@ -1,66 +1,22 @@
-# --- robot preview bits (MuJoCo) ---
-import os
-import mujoco as mj
-from ariel.body_phenotypes.robogen_lite.constructor import construct_mjspec_from_graph
-from ariel.simulation.controllers.controller import Controller
-from ariel.utils.tracker import Tracker
-import controller as ctrl_module
-from simulate import experiment
-from opposites import has_core_opposite_pair, simple_symmetry_score, worm_score
-from dynamic_duration import set_enabled, update_by_counts as set_duration
-
-
-# enable/disable viewer via env vars (no code edits later)
-SHOW_ROBOT = os.getenv("SHOW_ROBOT", "0") == "1"  # 1 -> open 3D viewer
-SHOW_ONLY_KILLS = os.getenv("SHOW_ONLY_KILLS", "1") == "1"
-PREVIEW_SECS = float(os.getenv("PREVIEW_SECS", "2.0"))
-
-
-def _preview_robot(robot, seconds: float = PREVIEW_SECS) -> None:
-    """Open a short MuJoCo viewer session to inspect the morphology."""
-    mj.set_mjcb_control(None)
-    core = construct_mjspec_from_graph(robot.graph)
-    tracker = Tracker(mujoco_obj_to_find=mj.mjtObj.mjOBJ_GEOM, name_to_bind="core")
-    ctrl = Controller(controller_callback_function=ctrl_module.cpg, tracker=tracker)
-    experiment(
-        robot=robot, core=core, controller=ctrl, mode="launcher", duration=seconds
-    )
-
-
-# --- symmetry / eval imports ---
 from opposites import has_core_opposite_pair, simple_symmetry_score
+from evaluate import STOCHASTIC_SPAWN_POSITIONS, set_spawn_position
 
-
-KILL_FITNESS = -100.0  # sentinel filtered out by selection
-
-SHOW_MORPH = os.getenv("SHOW_MORPH", "0") == "1"  # set to 1 to show popups
-SHOW_ONLY_KILLS = (
-    os.getenv("SHOW_ONLY_KILLS", "1") == "1"
-)  # default: show only killed ones
-
-import multi_spawn as ms
-from .mind import MindEA
-from typing import Any
-from collections.abc import Callable
-import multiprocessing as mp
-import numpy as np
-from robot import Robot
-from morphology_constraints import is_robot_viable
-from ariel import console
-
-SEED = 42
-RNG = np.random.default_rng(SEED)
 KILL_FITNESS = -100.0  # you already filter this out in selection
 
 
+from typing import Any
+from collections.abc import Callable
+import multiprocessing as mp
+
+import numpy as np
+from robot import Robot
+
+SEED = 42
+RNG = np.random.default_rng(SEED)
+
+from .mind import MindEA
+
 type Genotype = list[np.ndarray]
-
-
-def clip_values(genotype: Genotype) -> Genotype:
-    """Clip genotype values to stay within [0, 1] range."""
-    genotype = np.abs(genotype) % 2
-    genotype[genotype > 1] = 2 - genotype[genotype > 1]
-    return genotype
 
 
 class Mutate:
@@ -69,10 +25,8 @@ class Mutate:
 
     def gaussian(self, genotype: Genotype) -> Genotype:
         mutated_genotype = []
-        # Set different sigmas per genotype
-        sigmas = [0.05, 0.1, 0.1]
 
-        for gene, sigma in zip(genotype, sigmas):
+        for gene in genotype:
             # Create a copy to avoid modifying the original
             mutated = gene.copy()
             # Create a mask for which genes to mutate
@@ -80,11 +34,11 @@ class Mutate:
 
             # Apply Gaussian noise to selected genes
             if np.any(mutation_mask):
-                noise = RNG.normal(0, sigma, size=len(gene)).astype(np.float32)
+                noise = RNG.normal(0, 0.05, size=len(gene)).astype(np.float32)
                 mutated[mutation_mask] += noise[mutation_mask]
 
-                # Change values to stay within [0, 1] range
-                mutated = clip_values(mutated)
+                # Clip values to stay within [0, 1] bounds
+                mutated = np.clip(mutated, 0.0, 1.0)
 
             mutated_genotype.append(mutated)
 
@@ -163,8 +117,8 @@ class Crossover:
             child2 = RNG.uniform(extended_min, extended_max).astype(np.float32)
 
             # Clip to maintain [0, 1] bounds
-            child1 = clip_values(child1)
-            child2 = clip_values(child2)
+            child1 = np.clip(child1, 0.0, 1.0)
+            child2 = np.clip(child2, 0.0, 1.0)
 
             offspring1.append(child1)
             offspring2.append(child2)
@@ -175,49 +129,42 @@ class Crossover:
 class BodyEA:
     def __init__(
         self,
-        body_params: dict,
-        mind_params: dict,
-        evaluator: Callable[[Any], float] = None,
+        population_size: int,
+        generations: int,
+        genotype_size: int,
+        evaluator: Callable[[Any], float],
+        mutation_rate: float = 0.1,
+        crossover_rate: float = 0.7,
+        crossover_type: str = "onepoint",
+        elitism: int = 1,
+        selection: str = "tournament",
+        tournament_size: int = 3,
     ) -> None:
         """
         Simple evolutionary algorithm implementation.
 
         Args:
-            body_params (dict): Parameters for the body evolution algorithm.
-                Expected keys: population_size, generations, genotype_size,
-                mutation_rate, crossover_rate, crossover_type, elitism,
-                selection, tournament_size
-            mind_params (dict): Parameters for the mind evolution algorithm.
-                Expected keys: population_size, generations, mutation_rate,
-                crossover_rate, crossover_type, elitism, selection, tournament_size
+            population_size (int): Number of individuals in the population.
+            generations (int): Number of generations to run the algorithm.
+            genotype_size (int): Size of the genotype (number of genes).
             evaluator (callable): Function to evaluate the fitness of an individual.
+            mutation_rate (float): Probability of mutation for each gene.
+            crossover_rate (float): Probability of crossover between two parents.
+            crossover_type (str): Type of crossover ("onepoint", "uniform", or "blend").
+            elitism (int): Number of top individuals to carry over to the next generation.
+            selection (str): Selection method ("tournament" or "roulette").
+            tournament_size (int): Size of the tournament for tournament selection.
         """
-        # Extract body parameters with defaults
-        self.population_size = body_params.get("population_size", 20)
-        self.generations = body_params.get("generations", 10)
-        self.genotype_size = body_params.get("genotype_size", 100)
+        self.population_size = population_size
+        self.generations = generations
+        self.genotype_size = genotype_size
         self.evaluator = evaluator  # Function to evaluate fitness
-
-        # Body EA specific parameters
-        mutation_rate = body_params.get("mutation_rate", 0.1)
-        crossover_type = body_params.get("crossover_type", "onepoint")
-        self.crossover_rate = body_params.get("crossover_rate", 0.7)
-        self.elitism = body_params.get("elitism", 1)
-        self.selection = body_params.get("selection", "tournament")
-        self.tournament_size = body_params.get("tournament_size", 3)
-
-        # Initialize mutation and crossover operators
         self.mutate = Mutate(mutation_rate)
         self.crossover = Crossover(crossover_type)
-
-        # Store mind parameters for use in _eval_func
-        self.mind_params = mind_params
-
-        self.dynamic_duration_enabled: bool = body_params.get("dynamic_duration", True)
-        self.prev_fitnesses: list[float] | None = None
-        self.dynamic_duration_n_required: int = body_params.get(
-            "dynamic_duration_n_required", 3
-        )
+        self.crossover_rate = crossover_rate
+        self.elitism = elitism
+        self.selection = selection
+        self.tournament_size = tournament_size
 
     def random_genotype(self) -> Genotype:
         """Generate a random genotype."""
@@ -336,83 +283,77 @@ class BodyEA:
         for genotype in population:
             fitness = self._eval_func(genotype)
             fitness_scores.append(fitness)
-
         return fitness_scores
 
     def _eval_func(self, genotype: Genotype) -> float:
-        robot = Robot(genotype)
-
-        # Use mind_params for MindEA configuration
+        # Build morphology
         try:
             robot = Robot(genotype)
         except RuntimeError:
-            return KILL_FITNESS
+            return KILL_FITNESS  # e.g., no hinges
 
         G = robot.graph
 
-        # --- worm exception (keeps long single-tail bodies) ---
-        w_score, w_len, w_branches = worm_score(G)
-        WORM_LEN_MIN = 8  # tweak if needed
-        WORM_KEEP_THRESH = 0.65  # 0..1 chaininess
-        worm_ok = (w_len >= WORM_LEN_MIN) and (w_score >= WORM_KEEP_THRESH)
-
-        # cheap hard gate unless it's a worm
-        if not has_core_opposite_pair(G) and not worm_ok:
-            print("KILL (no opposite pair on core and not worm-like)")
+        # Cheap hard gate (optional, keeps cost low)
+        if not has_core_opposite_pair(G):
+            print("KILL (no opposite pair on core)")
             return KILL_FITNESS
 
-        # whole-body symmetry
-        sym = simple_symmetry_score(G, max_depth=3)
+        # Simple whole-body symmetry score (0..1)
+        score = simple_symmetry_score(G, max_depth=3)
 
-        # base kill prob from symmetry
-        threshold, softness = 0.6, 0.3
-        p_kill = max(0.0, min(1.0, (threshold - sym) / max(softness, 1e-6)))
+        # Probabilistic kill: worse symmetry -> higher chance to cull
+        threshold = 0.6  # raise to be stricter (e.g., 0.7)
+        softness = 0.3  # raise to soften ramp (e.g., 0.4)
+        p_kill = max(0.0, min(1.0, (threshold - score) / max(softness, 1e-6)))
 
-        # soften kill if worm-like (or bypass entirely)
-        if worm_ok:
-            p_kill *= 0.2  # 80% reduction; or set to 0 to always keep worms
+        # Quick debug line
+        print(f"sym={score:.3f}  p_kill={p_kill:.2f}")
 
-        # decide + optional preview
-        kill = RNG.random() < p_kill
-        print(
-            f"sym={sym:.3f}  p_kill={p_kill:.2f}  worm_score={w_score:.2f} "
-            f"len={w_len} branches={w_branches}  decision={'KILL' if kill else 'KEEP'}"
-        )
-        if SHOW_ROBOT and ((not SHOW_ONLY_KILLS) or kill):
-            _preview_robot(robot, seconds=PREVIEW_SECS)
+        if RNG.random() < p_kill:
+            print("KILL (probabilistic)")
+        # Quick debug line
+        print(f"sym={score:.3f}  p_kill={p_kill:.2f}")
 
-        if kill:
+        if RNG.random() < p_kill:
+            print("KILL (probabilistic)")
             return KILL_FITNESS
 
-        # survives -> MindEA
+        # Survives -> evaluate brain as before
+        # Survives -> evaluate brain as before
         ea = MindEA(
             robot=robot,
-            population_size=self.mind_params.get("population_size", 10),
-            generations=self.mind_params.get("generations", 1),
-            mutation_rate=self.mind_params.get("mutation_rate", 0.5),
-            crossover_rate=self.mind_params.get("crossover_rate", 0.0),
-            crossover_type=self.mind_params.get("crossover_type", "onepoint"),
-            elitism=self.mind_params.get("elitism", 2),
-            selection=self.mind_params.get("selection", "tournament"),
-            tournament_size=self.mind_params.get("tournament_size", 3),
+            population_size=20,
+            generations=1,
+            mutation_rate=0.5,
+            crossover_rate=0.0,
+            crossover_type="onepoint",
+            elitism=50,
+            selection="tournament",
+            tournament_size=5,
         )
         _, weights, _ = ea.run()
         return float(max(weights))
 
-    def create_initial_population(self) -> list[Genotype]:
-        population = []
-        killed = 0
-        while len(population) < self.population_size:
-            genotype = self.random_genotype()
-            if is_robot_viable(Robot(genotype)):
-                population.append(genotype)
-            else:
-                killed += 1
-
-        console.log(
-            f"Initial population: {self.population_size} viable, {killed} killed"
+        # def _eval_func(self, genotype: Genotype) -> float:
+        ea = MindEA(
+            robot=Robot(genotype),
+            population_size=20,
+            generations=1,
+            mutation_rate=0.5,
+            crossover_rate=0.0,
+            crossover_type="onepoint",
+            elitism=50,  # Keep top 10%
+            selection="tournament",
+            tournament_size=5,
         )
-        return population
+        _, weights, _ = ea.run()
+
+        return max(weights)
+
+    def create_initial_population(self) -> list[Genotype]:
+        return [self.random_genotype() for _ in range(self.population_size)]
+        return [self.random_genotype() for _ in range(self.population_size)]
 
     def apply_elitism(
         self, population: list[Genotype], fitness_scores: list[float]
@@ -440,22 +381,13 @@ class BodyEA:
         best_fitness_history = []
         average_fitness_history = []
 
-        set_enabled(self.dynamic_duration_enabled)
-
         for generation in range(self.generations):
-            # choose and store the generation’s spawn (respects MULTISPAWN_ENABLED)
-            ms.set_current_spawn(ms.MULTISPAWN_ENABLED)
-            spawn = ms.CURRENT_SPAWN or ms.DEFAULT_SPAWN
-
-            # set duration for THIS generation using prev gen's fitnesses
-            dur = set_duration(
-                prev_fitnesses=self.prev_fitnesses,
-                spawn_xyz=spawn,
-                n_required=self.dynamic_duration_n_required,
-                monotonic=True,
-            )
-            print(f"[GEN {generation+1}] spawn={spawn}, duration={dur}s")
-
+            print(f"Generation {generation+1}/{self.generations}")
+            current_spawn = STOCHASTIC_SPAWN_POSITIONS[
+                generation % len(STOCHASTIC_SPAWN_POSITIONS)
+            ]
+            set_spawn_position(current_spawn)
+            print(f"[GEN {generation+1}] using spawn {current_spawn}", flush=True)
             # Evaluate population
             fitness_scores = self.evaluate_population(population)
 
@@ -464,7 +396,6 @@ class BodyEA:
             average_fitness = sum(fitness_scores) / len(fitness_scores)
             best_fitness_history.append(best_fitness)
             average_fitness_history.append(average_fitness)
-            self.prev_fitnesses = fitness_scores[:]
 
             # Print progress
             if generation % 10 == 0 or generation == self.generations - 1:
@@ -477,7 +408,6 @@ class BodyEA:
 
             # Create new population
             new_population = elite_individuals.copy()
-            child1, child2 = None, None
 
             # Fill rest of population with offspring
             while len(new_population) < self.population_size:
@@ -486,32 +416,21 @@ class BodyEA:
 
                 # Apply crossover
                 if RNG.random() < self.crossover_rate:
-                    offspring1, offspring2 = self.crossover(parent1, parent2)
+                    child1, child2 = self.crossover(parent1, parent2)
                 else:
                     # If no crossover, children are copies of parents
-                    offspring1, offspring2 = [gene.copy() for gene in parent1], [
+                    child1, child2 = [gene.copy() for gene in parent1], [
                         gene.copy() for gene in parent2
                     ]
 
                 # Apply mutation
-                offspring1 = self.mutate.gaussian(offspring1)
-                offspring2 = self.mutate.gaussian(offspring2)
-
-                if child1 is None and is_robot_viable(Robot(offspring1)):
-                    child1 = offspring1
-
-                if child2 is None and is_robot_viable(Robot(offspring2)):
-                    child2 = offspring2
-
-                if child1 is None or child2 is None:
-                    continue  # Retry if either child is not viable
+                child1 = self.mutate.gaussian(child1)
+                child2 = self.mutate.gaussian(child2)
 
                 # Add to new population (check size to avoid exceeding population_size)
                 new_population.append(child1)
                 if len(new_population) < self.population_size:
                     new_population.append(child2)
-
-                child1, child2 = None, None  # Reset for next pair
 
             # Update population
             population = new_population

@@ -2,7 +2,19 @@ from itertools import combinations
 import sys
 import networkx as nx
 
+from ariel.body_phenotypes.robogen_lite.decoders.hi_prob_decoding import draw_graph
 from robot import Robot
+
+from ariel import console
+from ariel.body_phenotypes.robogen_lite.constructor import (
+    construct_mjspec_from_graph,
+)
+import mujoco as mj
+from ariel.simulation.controllers.controller import Controller
+from ariel.utils.tracker import Tracker
+import controller
+from simulate import experiment
+
 
 MIN_HINGES = 2
 MIN_BRICKS = 2
@@ -91,10 +103,10 @@ def is_valid_limb(G: nx.DiGraph, root: int, max_bricks_per_limb: int) -> bool:
         reasons.append("fewer than 2 HINGEs")
 
     if reasons:
-        print(f"  -> INVALID limb: {', '.join(reasons)}")
+        # print(f"  -> INVALID limb: {', '.join(reasons)}")
         return False
     else:
-        print("  -> VALID limb")
+        # print("  -> VALID limb")
         return True
 
 def two_valid_limbs(G: nx.DiGraph, out_edges: list[tuple[int, dict]], max_bricks_per_limb: int) -> int:
