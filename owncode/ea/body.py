@@ -24,7 +24,6 @@ def _preview_robot(robot, seconds: float = PREVIEW_SECS) -> None:
 
 # --- symmetry / eval imports ---
 from opposites import has_core_opposite_pair, simple_symmetry_score
-from evaluate import STOCHASTIC_SPAWN_POSITIONS, set_spawn_position
 
 KILL_FITNESS = -100.0  # sentinel filtered out by selection
 

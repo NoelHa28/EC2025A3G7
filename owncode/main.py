@@ -122,7 +122,7 @@ def main() -> None:
 
     # Run evolution
     console.log("Evolution started...")
-    best_genes, best_fitness_history, avg_fitness_history = ea.run(load_population=False)
+    best_genes, best_fitness_history, avg_fitness_history = ea.run()
     best_robot = Robot(best_genes)
 
     # Show evolution progress
