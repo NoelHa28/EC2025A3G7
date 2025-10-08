@@ -15,6 +15,58 @@ DATA = Path.cwd() / "__data__"
 
 NUM_OF_MODULES = 30
 
+import networkx as nx
+
+def morphology_graph_difference(G1: nx.DiGraph, G2: nx.DiGraph) -> float:
+    """
+    Compute a normalized difference between two directed morphology graphs (0 = identical, 1 = completely different).
+    Considers both node attributes and edge structure.
+    """
+    # --- 1. Node-level comparison ---
+    all_nodes = set(G1.nodes) | set(G2.nodes)
+    node_diffs = 0.0
+    
+    for node in all_nodes:
+        a = G1.nodes.get(node)
+        b = G2.nodes.get(node)
+
+        # Missing node in one graph
+        if a is None or b is None:
+            node_diffs += 1.0
+            continue
+
+        # Type difference
+        type_diff = 0.0 if a.get("type") == b.get("type") else 1.0
+
+        # Rotation difference (0–180 normalized)
+        rot_a = int(a.get("rotation", "DEG_0").split("_")[1])
+        rot_b = int(b.get("rotation", "DEG_0").split("_")[1])
+        rot_diff = abs(rot_a - rot_b) % 360
+        rot_diff = min(rot_diff, 360 - rot_diff) / 180.0
+
+        node_diffs += 0.7 * type_diff + 0.3 * rot_diff
+
+    node_diff_norm = node_diffs / max(1, len(all_nodes))
+
+    # --- 2. Edge-level comparison ---
+    all_edges = set(G1.edges) | set(G2.edges)
+    edge_diffs = 0.0
+
+    for edge in all_edges:
+        e1 = edge in G1.edges
+        e2 = edge in G2.edges
+        if e1 and e2:
+            edge_diffs += 0.0
+        else:
+            edge_diffs += 1.0
+
+    edge_diff_norm = edge_diffs / max(1, len(all_edges))
+
+    # --- 3. Combine node + edge components ---
+    total_diff = 0.6 * node_diff_norm + 0.4 * edge_diff_norm
+    return float(min(1.0, total_diff))
+
+
 class Robot:
     def __init__(
         self,
@@ -28,13 +80,13 @@ class Robot:
 
         if body_genotype is not None:
 
-            NDE = NeuralDevelopmentalEncodingWithLoading(number_of_modules=NUM_OF_MODULES)
+            self.NDE = NeuralDevelopmentalEncodingWithLoading(number_of_modules=NUM_OF_MODULES)
 
             if Path('nde_model.pt').exists():
-                NDE.load('nde_model.pt')
+                self.NDE.load('nde_model.pt')
 
-            NDE.eval()
-            self.graph = HighProbabilityDecoder(NUM_OF_MODULES).probability_matrices_to_graph(*NDE.forward(self.body_genotype))
+            self.NDE.eval()
+            self.graph = HighProbabilityDecoder(NUM_OF_MODULES).probability_matrices_to_graph(*self.NDE.forward(self.body_genotype))
 
         elif graph is not None:
             self.graph = graph

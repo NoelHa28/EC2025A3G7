@@ -69,12 +69,12 @@ def evaluate(robot: Robot, spawn: list[float] | None = None) -> float:
         if np.any(~np.isfinite(traj)):
             return -100
 
-        # Robot shouldn't learn to fall
-        if all(
-            np.isclose(start_cord, end_cord, atol=0.02)
-            for start_cord, end_cord in zip(traj[5], traj[-1])
-        ):
-            return -100
+        # # Robot shouldn't learn to fall
+        # if all(
+        #     np.isclose(start_cord, end_cord, atol=0.02)
+        #     for start_cord, end_cord in zip(traj[5], traj[-1])
+        # ):
+        #     return -100
 
         # Otherwise compute normal fitness
         f = fitness(traj)
