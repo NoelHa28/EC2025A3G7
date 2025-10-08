@@ -1,4 +1,36 @@
+# --- robot preview bits (MuJoCo) ---
+import os
+import mujoco as mj
+from ariel.body_phenotypes.robogen_lite.constructor import construct_mjspec_from_graph
+from ariel.simulation.controllers.controller import Controller
+from ariel.utils.tracker import Tracker
+import controller as ctrl_module
+from simulate import experiment
+from opposites import has_core_opposite_pair, simple_symmetry_score, worm_score
+
+
+# enable/disable viewer via env vars (no code edits later)
+SHOW_ROBOT      = os.getenv("SHOW_ROBOT", "0") == "1"   # 1 -> open 3D viewer
+SHOW_ONLY_KILLS = os.getenv("SHOW_ONLY_KILLS", "1") == "1"
+PREVIEW_SECS    = float(os.getenv("PREVIEW_SECS", "2.0"))
+
+def _preview_robot(robot, seconds: float = PREVIEW_SECS) -> None:
+    """Open a short MuJoCo viewer session to inspect the morphology."""
+    mj.set_mjcb_control(None)
+    core = construct_mjspec_from_graph(robot.graph)
+    tracker = Tracker(mujoco_obj_to_find=mj.mjtObj.mjOBJ_GEOM, name_to_bind="core")
+    ctrl = Controller(controller_callback_function=ctrl_module.cpg, tracker=tracker)
+    experiment(robot=robot, core=core, controller=ctrl, mode="launcher", duration=seconds)
+
+# --- symmetry / eval imports ---
 from opposites import has_core_opposite_pair, simple_symmetry_score
+from evaluate import STOCHASTIC_SPAWN_POSITIONS, set_spawn_position
+
+KILL_FITNESS = -100.0  # sentinel filtered out by selection
+
+SHOW_MORPH = os.getenv("SHOW_MORPH", "0") == "1"        # set to 1 to show popups
+SHOW_ONLY_KILLS = os.getenv("SHOW_ONLY_KILLS", "1") == "1"  # default: show only killed ones
+
 import multi_spawn as ms
 import dynamic_duration as dd
 from .mind import MindEA
@@ -302,6 +334,48 @@ class BodyEA:
         robot = Robot(genotype)
 
         # Use mind_params for MindEA configuration
+        try:
+            robot = Robot(genotype)
+        except RuntimeError:
+            return KILL_FITNESS
+
+        G = robot.graph
+
+        # --- worm exception (keeps long single-tail bodies) ---
+        w_score, w_len, w_branches = worm_score(G)
+        WORM_LEN_MIN = 8          # tweak if needed
+        WORM_KEEP_THRESH = 0.65   # 0..1 chaininess
+        worm_ok = (w_len >= WORM_LEN_MIN) and (w_score >= WORM_KEEP_THRESH)
+
+        # cheap hard gate unless it's a worm
+        if not has_core_opposite_pair(G) and not worm_ok:
+            print("KILL (no opposite pair on core and not worm-like)")
+            return KILL_FITNESS
+
+        # whole-body symmetry
+        sym = simple_symmetry_score(G, max_depth=3)
+
+        # base kill prob from symmetry
+        threshold, softness = 0.6, 0.3
+        p_kill = max(0.0, min(1.0, (threshold - sym) / max(softness, 1e-6)))
+
+        # soften kill if worm-like (or bypass entirely)
+        if worm_ok:
+            p_kill *= 0.2  # 80% reduction; or set to 0 to always keep worms
+
+        # decide + optional preview
+        kill = RNG.random() < p_kill
+        print(
+            f"sym={sym:.3f}  p_kill={p_kill:.2f}  worm_score={w_score:.2f} "
+            f"len={w_len} branches={w_branches}  decision={'KILL' if kill else 'KEEP'}"
+        )
+        if SHOW_ROBOT and ((not SHOW_ONLY_KILLS) or kill):
+            _preview_robot(robot, seconds=PREVIEW_SECS)
+
+        if kill:
+            return KILL_FITNESS
+
+        # survives -> MindEA
         ea = MindEA(
             robot=robot,
             population_size=self.mind_params.get("population_size", 10),
@@ -315,6 +389,7 @@ class BodyEA:
         )
         _, weights, _ = ea.run()
         return float(max(weights))
+
 
     def create_initial_population(self) -> list[Genotype]:
         population = []

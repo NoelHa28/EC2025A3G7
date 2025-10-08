@@ -76,3 +76,29 @@ def simple_symmetry_score(G: nx.DiGraph, max_depth=3) -> float:
         num += axis_score * w
         den += w
     return 0.0 if den == 0 else float(num / den)
+
+# --- Worm-like (single long tail) score ---------------------------------
+def worm_score(G) -> tuple[float, int, int]:
+    """
+    Returns (score, main_len, branch_nodes).
+    score ~1 when the robot is basically a single chain from the core.
+    """
+    c = _find_core(G)
+
+    # longest path length (in nodes) from core
+    from functools import lru_cache
+    @lru_cache(None)
+    def depth(u: int) -> int:
+        kids = list(G.successors(u))
+        if not kids:
+            return 1
+        return 1 + max(depth(v) for v in kids)
+
+    main_len = depth(c)                  # nodes on the longest trunk from core
+    total_nodes = max(1, G.number_of_nodes())
+    branch_nodes = sum(1 for n in G.nodes if G.out_degree(n) > 1)
+
+    # chaininess: long trunk fraction penalized by branching
+    score = (main_len / total_nodes) * (1.0 - branch_nodes / total_nodes)
+    return float(score), int(main_len), int(branch_nodes)
+
