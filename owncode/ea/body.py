@@ -17,6 +17,11 @@ KILL_FITNESS = -100.0  # you already filter this out in selection
 
 type Genotype = list[np.ndarray]
 
+def clip_values(genotype: Genotype) -> Genotype:
+    """Clip genotype values to stay within [0, 1] range."""
+    genotype = np.abs(genotype) % 2
+    genotype[genotype > 1] = 2 - genotype[genotype > 1]
+    return genotype
 
 class Mutate:
     def __init__(self, mutation_rate: float = 0.1) -> None:
@@ -24,8 +29,10 @@ class Mutate:
 
     def gaussian(self, genotype: Genotype) -> Genotype:
         mutated_genotype = []
+        # Set different sigmas per genotype
+        sigmas = [0.05, 0.1, 0.1]
 
-        for gene in genotype:
+        for gene, sigma in zip(genotype, sigmas):
             # Create a copy to avoid modifying the original
             mutated = gene.copy()
             # Create a mask for which genes to mutate
@@ -33,11 +40,11 @@ class Mutate:
 
             # Apply Gaussian noise to selected genes
             if np.any(mutation_mask):
-                noise = RNG.normal(0, 0.05, size=len(gene)).astype(np.float32)
+                noise = RNG.normal(0, sigma, size=len(gene)).astype(np.float32)
                 mutated[mutation_mask] += noise[mutation_mask]
 
-                # Clip values to stay within [0, 1] bounds
-                mutated = np.clip(mutated, 0.0, 1.0)
+                # Change values to stay within [0, 1] range
+                mutated = clip_values(mutated)
 
             mutated_genotype.append(mutated)
 
@@ -116,8 +123,8 @@ class Crossover:
             child2 = RNG.uniform(extended_min, extended_max).astype(np.float32)
 
             # Clip to maintain [0, 1] bounds
-            child1 = np.clip(child1, 0.0, 1.0)
-            child2 = np.clip(child2, 0.0, 1.0)
+            child1 = clip_values(child1)
+            child2 = clip_values(child2)
 
             offspring1.append(child1)
             offspring2.append(child2)
