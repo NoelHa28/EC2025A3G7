@@ -84,30 +84,31 @@ def main() -> None:
 
     # Body evolution parameters
     body_params = {
-        'population_size': 1,  # Smaller population for faster testing
-        'generations': 4,       # More generations for better evolution
-        'genotype_size': 64,
-        'mutation_rate': 0.5,   # Lower mutation rate to preserve good solutions
-        'crossover_rate': 0.0,  # Higher crossover rate
-        'crossover_type': 'uniform',  # Good for real-valued genes
-        'elitism': 2,           # Keep 2 best individuals (10% of population)
-        'selection': 'tournament',  # Tournament selection
-        'tournament_size': 3,
-        'dynamic_duratio': True,  # Enable dynamic duration
+        "population_size": 1,  # Smaller population for faster testing
+        "generations": 4,  # More generations for better evolution
+        "genotype_size": 64,
+        "mutation_rate": 0.5,  # Lower mutation rate to preserve good solutions
+        "crossover_rate": 0.0,  # Higher crossover rate
+        "crossover_type": "uniform",  # Good for real-valued genes
+        "elitism": 2,  # Keep 2 best individuals (10% of population)
+        "selection": "tournament",  # Tournament selection
+        "tournament_size": 3,
+        "dynamic_duration": True,  # Enable dynamic duration
+        "dynamic_duration_n_required": 3,  # Require 3 individuals to reach gates
     }
-    
+
     # Mind evolution parameters
     mind_params = {
-        'population_size': 10,
-        'generations': 1,
-        'mutation_rate': 0.5,
-        'crossover_rate': 0.0,
-        'crossover_type': 'onepoint',
-        'elitism': 2,
-        'selection': 'tournament',
-        'tournament_size': 3,
+        "population_size": 10,
+        "generations": 1,
+        "mutation_rate": 0.5,
+        "crossover_rate": 0.0,
+        "crossover_type": "onepoint",
+        "elitism": 2,
+        "selection": "tournament",
+        "tournament_size": 3,
     }
-    
+
     # Create evolutionary algorithm
     ea = BodyEA(
         body_params=body_params,
@@ -122,7 +123,7 @@ def main() -> None:
 
     # Run evolution
     console.log("Evolution started...")
-    best_genes, best_fitness_history, avg_fitness_history = ea.run(load_population=False)
+    best_genes, best_fitness_history, avg_fitness_history = ea.run()
     best_robot = Robot(best_genes)
 
     # Show evolution progress
@@ -154,6 +155,7 @@ def main_single_robot() -> None:
         robot = Robot(genotype)
 
     simulate_best_robot(robot)
+
 
 def run_mindEA() -> None:
 
@@ -194,7 +196,9 @@ def run_mindEA() -> None:
 
     # Calculate the slope from begin to end
     if len(avg_fitness_history) > 1:
-        slope = (avg_fitness_history[-1] - avg_fitness_history[0]) / (len(avg_fitness_history) - 1)
+        slope = (avg_fitness_history[-1] - avg_fitness_history[0]) / (
+            len(avg_fitness_history) - 1
+        )
         console.log(f"Slope of avg fitness: {slope:.4f}")
     else:
         console.log("Not enough data to calculate slope.")
@@ -202,7 +206,8 @@ def run_mindEA() -> None:
     # Simulate and visualize the best robot
     simulate_best_robot(robot)
 
+
 if __name__ == "__main__":
-    main()
-    # main_single_robot()
+    # main()
+    main_single_robot()
     # run_mindEA()

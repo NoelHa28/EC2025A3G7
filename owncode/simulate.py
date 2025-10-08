@@ -6,6 +6,7 @@ from ariel.utils.renderers import single_frame_renderer, video_renderer
 from ariel.utils.runners import simple_runner
 from ariel.utils.video_recorder import VideoRecorder
 
+
 # Local libraries
 from ariel.body_phenotypes.robogen_lite.modules.core import CoreModule
 from ariel.body_phenotypes.robogen_lite.constructor import construct_mjspec_from_graph
@@ -25,7 +26,7 @@ DATA.mkdir(exist_ok=True)
 
 # Global variables
 
-SPAWN_POS = [-0.8, 0, 0.1]
+SPAWN_POS = [0.4, 0, 0.1]
 
 
 def experiment(

@@ -7,12 +7,14 @@ from ariel.utils.tracker import Tracker
 import controller as ctrl_module
 from simulate import experiment
 from opposites import has_core_opposite_pair, simple_symmetry_score, worm_score
+from dynamic_duration import set_enabled, update_by_counts as set_duration
 
 
 # enable/disable viewer via env vars (no code edits later)
-SHOW_ROBOT      = os.getenv("SHOW_ROBOT", "0") == "1"   # 1 -> open 3D viewer
+SHOW_ROBOT = os.getenv("SHOW_ROBOT", "0") == "1"  # 1 -> open 3D viewer
 SHOW_ONLY_KILLS = os.getenv("SHOW_ONLY_KILLS", "1") == "1"
-PREVIEW_SECS    = float(os.getenv("PREVIEW_SECS", "2.0"))
+PREVIEW_SECS = float(os.getenv("PREVIEW_SECS", "2.0"))
+
 
 def _preview_robot(robot, seconds: float = PREVIEW_SECS) -> None:
     """Open a short MuJoCo viewer session to inspect the morphology."""
@@ -20,19 +22,23 @@ def _preview_robot(robot, seconds: float = PREVIEW_SECS) -> None:
     core = construct_mjspec_from_graph(robot.graph)
     tracker = Tracker(mujoco_obj_to_find=mj.mjtObj.mjOBJ_GEOM, name_to_bind="core")
     ctrl = Controller(controller_callback_function=ctrl_module.cpg, tracker=tracker)
-    experiment(robot=robot, core=core, controller=ctrl, mode="launcher", duration=seconds)
+    experiment(
+        robot=robot, core=core, controller=ctrl, mode="launcher", duration=seconds
+    )
+
 
 # --- symmetry / eval imports ---
 from opposites import has_core_opposite_pair, simple_symmetry_score
-from evaluate import STOCHASTIC_SPAWN_POSITIONS, set_spawn_position
+
 
 KILL_FITNESS = -100.0  # sentinel filtered out by selection
 
-SHOW_MORPH = os.getenv("SHOW_MORPH", "0") == "1"        # set to 1 to show popups
-SHOW_ONLY_KILLS = os.getenv("SHOW_ONLY_KILLS", "1") == "1"  # default: show only killed ones
+SHOW_MORPH = os.getenv("SHOW_MORPH", "0") == "1"  # set to 1 to show popups
+SHOW_ONLY_KILLS = (
+    os.getenv("SHOW_ONLY_KILLS", "1") == "1"
+)  # default: show only killed ones
 
 import multi_spawn as ms
-import dynamic_duration as dd
 from .mind import MindEA
 from typing import Any
 from collections.abc import Callable
@@ -49,11 +55,13 @@ KILL_FITNESS = -100.0  # you already filter this out in selection
 
 type Genotype = list[np.ndarray]
 
+
 def clip_values(genotype: Genotype) -> Genotype:
     """Clip genotype values to stay within [0, 1] range."""
     genotype = np.abs(genotype) % 2
     genotype[genotype > 1] = 2 - genotype[genotype > 1]
     return genotype
+
 
 class Mutate:
     def __init__(self, mutation_rate: float = 0.1) -> None:
@@ -205,10 +213,11 @@ class BodyEA:
         # Store mind parameters for use in _eval_func
         self.mind_params = mind_params
 
-        self.best_so_far: float | None = None  # Track best fitness so far
-        self.dynamic_duration_enabled: bool = body_params.get(
-            "dynamic_duration", True
-        )  # expose a knob
+        self.dynamic_duration_enabled: bool = body_params.get("dynamic_duration", True)
+        self.prev_fitnesses: list[float] | None = None
+        self.dynamic_duration_n_required: int = body_params.get(
+            "dynamic_duration_n_required", 3
+        )
 
     def random_genotype(self) -> Genotype:
         """Generate a random genotype."""
@@ -343,8 +352,8 @@ class BodyEA:
 
         # --- worm exception (keeps long single-tail bodies) ---
         w_score, w_len, w_branches = worm_score(G)
-        WORM_LEN_MIN = 8          # tweak if needed
-        WORM_KEEP_THRESH = 0.65   # 0..1 chaininess
+        WORM_LEN_MIN = 8  # tweak if needed
+        WORM_KEEP_THRESH = 0.65  # 0..1 chaininess
         worm_ok = (w_len >= WORM_LEN_MIN) and (w_score >= WORM_KEEP_THRESH)
 
         # cheap hard gate unless it's a worm
@@ -390,7 +399,6 @@ class BodyEA:
         _, weights, _ = ea.run()
         return float(max(weights))
 
-
     def create_initial_population(self) -> list[Genotype]:
         population = []
         killed = 0
@@ -432,13 +440,21 @@ class BodyEA:
         best_fitness_history = []
         average_fitness_history = []
 
+        set_enabled(self.dynamic_duration_enabled)
+
         for generation in range(self.generations):
             # choose and store the generation’s spawn (respects MULTISPAWN_ENABLED)
             ms.set_current_spawn(ms.MULTISPAWN_ENABLED)
+            spawn = ms.CURRENT_SPAWN or ms.DEFAULT_SPAWN
 
-            # set duration for THIS generation using best_so_far (from previous gens)
-            dur = dd.update_for_generation(self.best_so_far, ms.CURRENT_SPAWN)
-            print(f"[GEN {generation+1}] spawn={ms.CURRENT_SPAWN}, duration={dur}s")
+            # set duration for THIS generation using prev gen's fitnesses
+            dur = set_duration(
+                prev_fitnesses=self.prev_fitnesses,
+                spawn_xyz=spawn,
+                n_required=self.dynamic_duration_n_required,
+                monotonic=True,
+            )
+            print(f"[GEN {generation+1}] spawn={spawn}, duration={dur}s")
 
             # Evaluate population
             fitness_scores = self.evaluate_population(population)
@@ -448,11 +464,8 @@ class BodyEA:
             average_fitness = sum(fitness_scores) / len(fitness_scores)
             best_fitness_history.append(best_fitness)
             average_fitness_history.append(average_fitness)
-            self.best_so_far = (
-                best_fitness
-                if (self.best_so_far is None)
-                else max(self.best_so_far, best_fitness)
-            )
+            self.prev_fitnesses = fitness_scores[:]
+
             # Print progress
             if generation % 10 == 0 or generation == self.generations - 1:
                 print(
@@ -464,7 +477,6 @@ class BodyEA:
 
             # Create new population
             new_population = elite_individuals.copy()
-
             child1, child2 = None, None
 
             # Fill rest of population with offspring

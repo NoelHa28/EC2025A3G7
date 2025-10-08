@@ -8,11 +8,10 @@ MULTISPAWN_ENABLED: bool = False
 
 STOCHASTIC_SPAWN_POSITIONS: list[list[float]] = [
     [-0.8, 0, 0.1],  # start / flat
-    [0.7,  0, 0.1],  # rugged
-    [2.5,  0, 0.1],  # uphill
+    [0.4,  0, 0.1],  # rugged
+    [2.2,  0, 0.1],  # uphill
 ]
 DEFAULT_SPAWN: list[float] = [-0.8, 0, 0.1]  
-
 CURRENT_SPAWN: list[float] | None = None
 
 def _load_spawn_from_env() -> list[float] | None:
