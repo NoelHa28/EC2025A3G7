@@ -7,6 +7,8 @@ import dynamic_duration as dd
 from robot import Robot
 import mujoco as mj
 
+
+
 # Local libraries
 from ariel import console
 from ariel.body_phenotypes.robogen_lite.constructor import (
@@ -79,7 +81,7 @@ def evaluate(robot: Robot, spawn: list[float] | None = None) -> float:
         steps_recorded = (
             len(tracker.history["xpos"][0]) if tracker.history["xpos"] else 0
         )
-        console.log(f"Sim ran for {steps_recorded} steps")
+        # console.log(f"Sim ran for {steps_recorded} steps")
 
         return float(f)
 

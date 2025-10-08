@@ -5,6 +5,7 @@ import multiprocessing as mp
 import numpy as np
 from robot import Robot
 from evaluate import evaluate
+import math
 
 SEED = 42
 RNG = np.random.default_rng(SEED)
@@ -14,17 +15,82 @@ CPU_COUNT = mp.cpu_count()
 
 type Genotype = np.ndarray
 
+def solve_for_n(x):
+    """
+    Solves 3N^2 + 2N = X for the positive N.
+    Returns a single positive float.
+    """
+    discriminant = 4 + 12 * x
+    if discriminant < 0:
+        return None  # no real solutions
+    
+    sqrt_disc = math.sqrt(discriminant)
+    n = (-2 + sqrt_disc) / 6
+    return n if n > 0 else None
+
 class Mutation:
-    def __init__(self, mutation_rate: float):
+    def __init__(self, mutation_rate: float, n: int):
         self.mutation_rate = mutation_rate
+        self.n = n
+
+    def __call__(self, genotype: Genotype) -> Genotype:
+        # genotype[:self.n] = self.bit_flip(genotype[:self.n])
+        genotype[self.n:] = self.gaussian(genotype[self.n:])
+
+        return genotype.clip(0.0, 1.0)
+
+    def bit_flip(self, genotype: Genotype) -> Genotype:
+        """Apply bit-flip mutation to the genotype."""
+        for i in range(len(genotype)):
+            if RNG.random() < self.mutation_rate:
+                genotype[i] = 1.0 - genotype[i]  # Flip between 0 and 1
+        return genotype
 
     def gaussian(self, genotype: Genotype) -> Genotype:
         """Apply Gaussian mutation to the genotype."""
         if RNG.random() < self.mutation_rate:
             # Apply random mutation
-            mutation = RNG.normal(0, 0.1, size=genotype.shape).astype(np.float32)
+            mutation = RNG.normal(0, 0.05, size=genotype.shape).astype(np.float32)
             genotype += mutation
         return genotype
+
+class Crossover:
+    def __init__(self, crossover_type: str, n: int):
+        self.crossover_type = crossover_type
+        self.n = n
+
+    def __call__(self, parent1: Genotype, parent2: Genotype) -> tuple[Genotype, Genotype]:
+        if self.crossover_type == "onepoint":
+            return self.one_point(parent1, parent2)
+        elif self.crossover_type == "uniform":
+            return self.uniform(parent1, parent2)
+        elif self.crossover_type == "blend":
+            return self.blend(parent1, parent2)
+        else:
+            raise ValueError(f"Unknown crossover type: {self.crossover_type}")
+
+    def one_point(self, parent1: Genotype, parent2: Genotype) -> tuple[Genotype, Genotype]:
+        """One-point crossover between two parents."""
+        point = RNG.integers(1, len(parent1) - 1)
+        child1 = np.concatenate((parent1[:point], parent2[point:]))
+        child2 = np.concatenate((parent2[:point], parent1[point:]))
+        return child1.astype(np.float32), child2.astype(np.float32)
+
+    def uniform(self, parent1: Genotype, parent2: Genotype) -> tuple[Genotype, Genotype]:
+        """Uniform crossover between two parents."""
+        mask = RNG.random(len(parent1)) < 0.5
+        child1 = np.where(mask, parent1, parent2)
+        child2 = np.where(mask, parent2, parent1)
+        return child1.astype(np.float32), child2.astype(np.float32)
+
+    def blend(self, parent1: Genotype, parent2: Genotype, alpha: float = 0.5) -> tuple[Genotype, Genotype]:
+        """Blend crossover between two parents."""
+        child1 = (alpha * parent1 + (1 - alpha) * parent2).astype(np.float32)
+        child2 = (alpha * parent2 + (1 - alpha) * parent1).astype(np.float32)
+
+        child1[self.n:] = child1[self.n:].round()
+        child2[self.n:] = child2[self.n:].round()
+        return child1, child2
 
 class MindEA:
     def __init__(
@@ -55,10 +121,13 @@ class MindEA:
             tournament_size (int): Size of the tournament for tournament selection.
         """
         self.robot = robot
+
+        connection_params = robot._number_of_hinges ** 2
+
         self.population_size = population_size
         self.generations = generations
-        self.mutate = Mutation(mutation_rate)
-        self.crossover_type = crossover_type
+        self.mutate = Mutation(mutation_rate, connection_params)
+        self.crossover = Crossover(crossover_type, connection_params)
         self.crossover_rate = crossover_rate
         self.elitism = elitism
         self.selection = selection
@@ -223,8 +292,8 @@ class MindEA:
                     child1, child2 = self.crossover(parent1, parent2)
 
                 # Apply mutation
-                child1 = self.mutate.gaussian(child1)
-                child2 = self.mutate.gaussian(child2)
+                child1 = self.mutate(child1)
+                child2 = self.mutate(child2)
                 
                 # Add to new population (check size to avoid exceeding population_size)
                 new_population.append(child1)
