@@ -7,6 +7,7 @@ import numpy as np
 
 from ariel.simulation.environments import OlympicArena
 from ariel.utils.renderers import single_frame_renderer
+from robot import Robot
 
 type ViewerTypes = Literal["launcher", "video", "simple", "no_control", "frame"]
 
@@ -19,7 +20,7 @@ DATA.mkdir(exist_ok=True)
 SPAWN_POS = [-0.8, 0, 0.1]
 TARGET_POSITION = [5, 0, 0.5]
 
-def show_xpos_history(history: list[float]) -> None:
+def show_xpos_history(robot: Robot, history: list[float], save_path_=None) -> None:
     # Create a tracking camera
     camera = mj.MjvCamera()
     camera.type = mj.mjtCamera.mjCAMERA_FREE
@@ -67,9 +68,12 @@ def show_xpos_history(history: list[float]) -> None:
         pos_data_pixel.append([xn + int(xd), yn + int(yd)])
     pos_data_pixel = np.array(pos_data_pixel)
 
+    x0 = robot.spawn_point[0]
+    y0 = robot.spawn_point[1]
+
     # Plot x,y trajectory
-    ax.plot(x0, y0, "kx", label="[0, 0, 0]")
-    ax.plot(xc, yc, "go", label="Start")
+    # ax.plot(x0, y0, "kx", label="[0, 0, 0]")
+    ax.plot(x0, y0, "go", label="Start")
     ax.plot(pos_data_pixel[:, 0], pos_data_pixel[:, 1], "b-", label="Path")
     ax.plot(pos_data_pixel[-1, 0], pos_data_pixel[-1, 1], "ro", label="End")
 
@@ -81,8 +85,11 @@ def show_xpos_history(history: list[float]) -> None:
     # Title
     plt.title("Robot Path in XY Plane")
 
-    # Show results
-    plt.show()
+    if save_path_ is not None:
+        plt.savefig(save_path_)
+    else:
+        # Show results
+        plt.show()
 
 
 def plot_evolution_progress(best_fitness_history: list[float], avg_fitness_history: list[float]) -> None:

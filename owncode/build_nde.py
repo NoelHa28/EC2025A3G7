@@ -11,8 +11,8 @@ from consts import RNG, GENOTYPE_SIZE
 robot = None
 while robot is None or not is_robot_viable(robot, max_bricks_per_limb=3):
     genotype = [
-        RNG.uniform(0, 1, GENOTYPE_SIZE).astype(np.float32),
-        RNG.uniform(-100, 100, GENOTYPE_SIZE).astype(np.float32),
-        RNG.uniform(-100, 100, GENOTYPE_SIZE).astype(np.float32),
+        RNG.uniform(-1, 1, GENOTYPE_SIZE).astype(np.float32),
+        RNG.uniform(-1, 1, GENOTYPE_SIZE).astype(np.float32),
+        RNG.uniform(-1, 1, GENOTYPE_SIZE).astype(np.float32),
     ]
-    robot = Robot(genotype)
+    robot = Robot(body_genotype=genotype)

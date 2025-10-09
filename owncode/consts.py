@@ -1,3 +1,4 @@
+from pathlib import Path
 import numpy as np
 
 STOCHASTIC_SPAWN_POSITIONS: list[list[float]] = [
@@ -14,3 +15,8 @@ SEED = 42
 RNG = np.random.default_rng(SEED)
 
 GENOTYPE_SIZE = 64
+
+SCRIPT_NAME = __file__.split("/")[-1][:-3]
+CWD = Path.cwd()
+DATA = CWD / "__data__" / SCRIPT_NAME
+DATA.mkdir(exist_ok=True)

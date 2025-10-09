@@ -28,7 +28,6 @@ DATA.mkdir(exist_ok=True)
 
 SPAWN_POS = [-.8, 0, 0.1]
 
-
 def experiment(
     robot: Robot,
     core: CoreModule,

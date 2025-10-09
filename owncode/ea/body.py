@@ -3,6 +3,9 @@ from collections.abc import Callable
 
 import numpy as np
 
+from ariel.body_phenotypes.robogen_lite.decoders.hi_prob_decoding import draw_graph, save_graph_as_json
+
+from evaluate import evaluate
 from morphology_constraints import is_robot_viable
 from consts import STOCHASTIC_SPAWN_POSITIONS, RNG
 from .mind import MindEA
@@ -322,7 +325,7 @@ class BodyEA:
         while len(population) < self.population_size:
             genotype = self.random_genotype()
             robot = Robot(genotype)
-            if is_robot_viable(robot, max_bricks_per_limb=3):
+            if is_robot_viable(robot):
                 population.append(genotype)
         print("Initial population created.")
         return population
@@ -341,9 +344,24 @@ class BodyEA:
 
     def _get_spawn_point(self, generation: int) -> list[float]:
         # Cycle through predefined spawn points based on generation number
+        return STOCHASTIC_SPAWN_POSITIONS[0]
         return STOCHASTIC_SPAWN_POSITIONS[generation % len(STOCHASTIC_SPAWN_POSITIONS)]
 
-    def run(self) -> tuple[Genotype, list[float], list[float]]:
+    def export_population(self, population: list[Genotype]) -> None:
+        """Export the current population to a file."""
+        import pickle
+
+        with open('saved_population.pkl', 'wb') as f:
+            pickle.dump(population, f)
+
+    def load_population(self) -> list[Genotype]:
+        """Load a population from a file."""
+        import pickle
+
+        with open('saved_population.pkl', 'rb') as f:
+            return pickle.load(f)
+
+    def run(self, load_population: bool = True) -> tuple[Genotype, list[float], list[float]]:
         """
         Run the evolutionary algorithm.
 
@@ -351,7 +369,10 @@ class BodyEA:
             tuple: (best_individual, best_fitness_history, average_fitness_history)
         """
         # Initialize population
-        population = self.create_initial_population()
+        if load_population:
+            population = self.load_population()
+        else:
+            population = self.create_initial_population()
 
         # Track statistics
         best_fitness_history = []
@@ -363,6 +384,8 @@ class BodyEA:
             self.current_spawn_point = self._get_spawn_point(generation)
 
             fitness_scores = self.evaluate_population(population)
+            best_index = np.argmax(fitness_scores)
+            best_individual = population[best_index]
 
             # Track statistics
             best_fitness = max(fitness_scores)
@@ -382,6 +405,8 @@ class BodyEA:
             # Create new population
             new_population = elite_individuals.copy()
 
+            offspring1, offspring2 = None, None
+
             # Fill rest of population with offspring
             while len(new_population) < self.population_size:
                 # Select parents
@@ -400,13 +425,25 @@ class BodyEA:
                 child1 = self.mutate.gaussian(child1)
                 child2 = self.mutate.gaussian(child2)
 
+                if offspring1 is None and is_robot_viable(Robot(body_genotype=child1)):
+                    offspring1 = child1
+
+                if offspring2 is None and is_robot_viable(Robot(body_genotype=child2)):
+                    offspring2 = child2
+
+                if offspring1 is None or offspring2 is None:
+                    continue  # Retry if either offspring is not viable
+
                 # Add to new population (check size to avoid exceeding population_size)
-                new_population.append(child1)
+                new_population.append(offspring1)
                 if len(new_population) < self.population_size:
-                    new_population.append(child2)
+                    new_population.append(offspring2)
 
             # Update population
             population = new_population
+
+            self.export_population(population)
+            save_graph_as_json(Robot(body_genotype=best_individual).graph, 'SAVED_GRAPH.json')
 
         # Return best individual from final generation
         final_fitness_scores = self.evaluate_population(population)

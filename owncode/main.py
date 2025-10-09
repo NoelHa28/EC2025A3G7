@@ -62,24 +62,24 @@ def simulate_best_robot(best_robot: Robot, mode: ViewerTypes = "launcher") -> No
 
     # Show trajectory
     if tracker.history["xpos"] and len(tracker.history["xpos"][0]) > 0:
-        show_xpos_history(tracker.history["xpos"][0])
+        show_xpos_history(best_robot, tracker.history["xpos"][0])
         f = fitness(best_robot.spawn_point, tracker.history["xpos"][0])
         console.log(f"Best robot fitness: {f:.4f}")
     else:
         console.log("No movement data recorded!")
 
 
-def main() -> None:
+def main(load_pop: bool = True) -> None:
     """Entry point - Run evolutionary algorithm to evolve robots."""
     console.log("Starting robot evolution...")
 
     # Body evolution parameters
     body_params = {
-        "population_size": 5,  # Smaller population for faster testing
-        "generations": 20,  # More generations for better evolution
+        "population_size": 10,  # Smaller population for faster testing
+        "generations": 10,  # More generations for better evolution
         "genotype_size": 64,
-        "mutation_rate": 0.2,  # Lower mutation rate to preserve good solutions
-        "crossover_rate": 0.8,  # Higher crossover rate
+        "mutation_rate": 0.8,  # Lower mutation rate to preserve good solutions
+        "crossover_rate": 0.0,  # Higher crossover rate
         "crossover_type": "uniform",  # Good for real-valued genes
         "elitism": 1,  # Keep 1 best individual (10% of population)
         "selection": "tournament",  # Tournament selection
@@ -90,14 +90,14 @@ def main() -> None:
 
     # Mind evolution parameters
     mind_params = {
-        "population_size": 5,
-        "generations": 10,
+        "population_size": 10,
+        "generations": 15,
         "mutation_rate": 0.5,
-        "crossover_rate": 0.0,
+        "crossover_rate": 0.5,
         "crossover_type": "onepoint",
-        "elitism": 1,
+        "elitism": 5,
         "selection": "tournament",
-        "tournament_size": 2,
+        "tournament_size": 3,
     }
 
     # Create evolutionary algorithm
@@ -114,7 +114,7 @@ def main() -> None:
 
     # Run evolution
     console.log("Evolution started...")
-    best_genes, best_fitness_history, avg_fitness_history = ea.run()
+    best_genes, best_fitness_history, avg_fitness_history = ea.run(load_pop)
     best_robot = Robot(best_genes)
 
     # Show evolution progress
@@ -131,9 +131,9 @@ def main_single_robot() -> None:
     robot = None
     while robot is None or not is_robot_viable(robot, max_bricks_per_limb=3):
         genotype = [
-            RNG.uniform(0, 1, GENOTYPE_SIZE).astype(np.float32),
-            RNG.uniform(-100, 100, GENOTYPE_SIZE).astype(np.float32),
-            RNG.uniform(-100, 100, GENOTYPE_SIZE).astype(np.float32),
+            RNG.uniform(-1, 1, GENOTYPE_SIZE).astype(np.float32),
+            RNG.uniform(-1, 1, GENOTYPE_SIZE).astype(np.float32),
+            RNG.uniform(-1, 1, GENOTYPE_SIZE).astype(np.float32),
         ]
         robot = Robot(
             spawn_point=[-0.8, 0, 0.1],
@@ -142,30 +142,29 @@ def main_single_robot() -> None:
 
     f = evaluate(robot)
 
-    simulate_best_robot(robot, mode="launcher")
     print(f"Single robot fitness: {f:.4f}")
 
 def run_mindEA() -> None:
 
     robot = None
-    while robot is None or not is_robot_viable(robot, max_bricks_per_limb=2):
+    while robot is None or not is_robot_viable(robot):
         genotype = [
-            RNG.uniform(0, 1, GENOTYPE_SIZE).astype(np.float32),
-            RNG.uniform(-100, 100, GENOTYPE_SIZE).astype(np.float32),
-            RNG.uniform(-100, 100, GENOTYPE_SIZE).astype(np.float32),
+            RNG.uniform(-1, 1, GENOTYPE_SIZE).astype(np.float32),
+            RNG.uniform(-1, 1, GENOTYPE_SIZE).astype(np.float32),
+            RNG.uniform(-1, 1, GENOTYPE_SIZE).astype(np.float32),
         ]
         robot = Robot(body_genotype=genotype)
 
     ea = MindEA(
         robot=robot,
         population_size=200,
-        generations=15,
-        mutation_rate=0.9,
-        crossover_rate=0.0,
+        generations=10,
+        mutation_rate=0.5,
+        crossover_rate=0.5,
         crossover_type="blend",
         elitism=20,
         selection="tournament",
-        tournament_size=3,
+        tournament_size=5,
     )
 
     # Run evolution
@@ -194,6 +193,7 @@ def run_mindEA() -> None:
 
 
 if __name__ == "__main__":
-    # main()
+    # main(load_pop=True)
     # main_single_robot()
     run_mindEA()
+
