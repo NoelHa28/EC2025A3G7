@@ -325,7 +325,7 @@ class BodyEA:
         while len(population) < self.population_size:
             genotype = self.random_genotype()
             robot = Robot(genotype)
-            if is_robot_viable(robot):
+            if self.evaluator(robot, learn_test=True) == 1:
                 population.append(genotype)
         print("Initial population created.")
         return population

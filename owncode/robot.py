@@ -77,7 +77,7 @@ class Robot:
         spawn_point: list[float] = STOCHASTIC_SPAWN_POSITIONS[0],
         body_genotype: list[np.ndarray] | None = None,
         graph: None | object = None,
-        mind_genotype: np.ndarray | None = None
+        mind_genotype: np.ndarray | None = None,
     ) -> None:
         
         assert body_genotype is not None or graph is not None, "Either body_genotype or graph must be provided."
@@ -88,11 +88,12 @@ class Robot:
         self.mind_genotype = mind_genotype
 
         if body_genotype is not None:
-
-            self.NDE = NeuralDevelopmentalEncodingWithLoading(number_of_modules=NUM_OF_MODULES)
-            # self.NDE.save()
+           
             if Path('nde_model.pt').exists():
                 self.NDE.load('nde_model.pt')
+            else:
+                self.NDE = NeuralDevelopmentalEncodingWithLoading(number_of_modules=NUM_OF_MODULES)
+                self.NDE.save()
 
             self.NDE.eval()
             self.graph = HighProbabilityDecoder(NUM_OF_MODULES).probability_matrices_to_graph(*self.NDE.forward(self.body_genotype))

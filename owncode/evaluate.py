@@ -13,7 +13,7 @@ from robot import Robot
 from simulate import experiment
 from fitness_function import fitness
 
-def evaluate(robot: Robot) -> float:
+def evaluate(robot: Robot, learn_test: bool = False) -> float:
     """
     Evaluate a robot genotype by simulating it and returning fitness.
     Handles invalid or unstable robots safely.
@@ -35,15 +35,37 @@ def evaluate(robot: Robot) -> float:
             tracker=tracker,
         )
 
-        # Run simulation
-        experiment(
-            robot=robot,
-            core=core,
-            controller=ctrl,
-            mode="simple",
-            duration=dd.get_current_duration(),
-            spawn_pos=robot.spawn_point,
-        )
+        if learn_test:
+            # Run simulation
+            experiment(
+                robot=robot,
+                core=core,
+                controller=ctrl,
+                mode="simple",
+                duration=10,
+                spawn_pos=[-0.8, 0, 0.1],  # fixed spawn for learning test
+            )
+            
+            dist3 = tracker.history["xpos"][0][3]
+            distend = tracker.history["xpos"][0][-1]
+            dist_travelled = np.linalg.norm(np.array(distend) - np.array(dist3))
+            console.log(f"Distance travelled in learning test: {dist_travelled:.4f}")
+            if dist_travelled < 0.2:
+                console.log("Robot failed learning test (did not move enough).")
+                return 0
+            else:
+                console.log("Robot passed learning test.")
+                return 1  # neutral fitness for passing learning test
+        else:
+            # Run simulation
+            experiment(
+                robot=robot,
+                core=core,
+                controller=ctrl,
+                mode="simple",
+                duration=dd.get_current_duration(),
+                spawn_pos=robot.spawn_point,
+            )
 
         # --- SAFETY CHECKS ---
         # No trajectory recorded
