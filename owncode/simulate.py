@@ -14,19 +14,7 @@ from ariel.simulation.controllers.controller import Controller
 from ariel.simulation.environments import OlympicArena
 
 from robot import Robot
-
-# Type Aliases
-ViewerTypes = Literal["launcher", "video", "simple", "no_control", "frame"]
-
-# --- DATA SETUP ---
-SCRIPT_NAME = __file__.split("/")[-1][:-3]
-CWD = Path.cwd()
-DATA = CWD / "__data__" / SCRIPT_NAME
-DATA.mkdir(exist_ok=True)
-
-# Global variables
-
-SPAWN_POS = [-.8, 0, 0.1]
+from consts import DATA, STOCHASTIC_SPAWN_POSITIONS, ViewerTypes
 
 def experiment(
     robot: Robot,
@@ -48,7 +36,7 @@ def experiment(
     # Spawn robot in the world
     # Check docstring for spawn conditions
     # CRITICAL FIX: Pass a copy of SPAWN_POS to prevent in-place modification!
-    world.spawn(core.spec, spawn_position=(spawn_pos or SPAWN_POS).copy())
+    world.spawn(core.spec, position=(spawn_pos or STOCHASTIC_SPAWN_POSITIONS[0]).copy())
 
     # Generate the model and data
     # These are standard parts of the simulation USE THEM AS IS, DO NOT CHANGE

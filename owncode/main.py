@@ -1,7 +1,7 @@
 import sys
 from typing import Literal
 from pathlib import Path
-import random
+from collections.abc import Callable
 
 import mujoco as mj
 import numpy as np
@@ -23,7 +23,7 @@ from simulate import experiment
 from evaluate import evaluate
 import controller
 import random
-from consts import RNG, GENOTYPE_SIZE
+from consts import RNG, GENOTYPE_SIZE, STOCHASTIC_SPAWN_POSITIONS
 
 
 # Type Aliases
@@ -35,7 +35,7 @@ CWD = Path.cwd()
 DATA = CWD / "__data__" / SCRIPT_NAME
 DATA.mkdir(exist_ok=True)
 
-def simulate_best_robot(best_robot: Robot, mode: ViewerTypes = "launcher") -> None:
+def simulate_best_robot(best_robot: Robot, mode: ViewerTypes = "launcher", controller_func: Callable = controller.cpg) -> None:
     """Simulate the best evolved robot."""
     console.log("Simulating best evolved robot...")
     mj.set_mjcb_control(None)  # DO NOT REMOVE
@@ -53,7 +53,7 @@ def simulate_best_robot(best_robot: Robot, mode: ViewerTypes = "launcher") -> No
 
     # Setup controller
     ctrl = Controller(
-        controller_callback_function=controller.cpg,
+        controller_callback_function=controller_func,
         tracker=tracker,
     )
 
@@ -137,14 +137,9 @@ def main_single_robot() -> None:
             RNG.uniform(-1, 1, GENOTYPE_SIZE).astype(np.float32),
             RNG.uniform(-1, 1, GENOTYPE_SIZE).astype(np.float32),
         ]
-        robot = Robot(
-            spawn_point=[-0.8, 0, 0.1],
-            body_genotype=genotype
-            )
+        robot = Robot(body_genotype=genotype)
 
-    f = evaluate(robot)
-
-    print(f"Single robot fitness: {f:.4f}")
+    simulate_best_robot(robot, controller_func=controller.random)
 
 def run_mindEA() -> None:
 
@@ -195,6 +190,7 @@ def run_mindEA() -> None:
 
 
 if __name__ == "__main__":
-    main()
-    # main_single_robot()
-    #run_mindEA()
+    # main(load_pop=True)
+    main_single_robot()
+    # run_mindEA()
+

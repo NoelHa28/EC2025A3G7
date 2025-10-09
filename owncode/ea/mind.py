@@ -3,6 +3,7 @@ from collections.abc import Callable
 import multiprocessing as mp
 
 import numpy as np
+import controller
 from robot import Robot
 from evaluate import evaluate
 import math
@@ -231,7 +232,7 @@ class MindEA:
 
     def _eval_func(self, genotype: Genotype) -> Any:
         self.robot.brain.set_genotype(genotype)
-        return evaluate(self.robot)
+        return evaluate(self.robot, controller.cpg)
 
     def create_initial_population(self) -> list[Genotype]:
         return [self.random_genotype() for _ in range(self.population_size)]
@@ -261,7 +262,6 @@ class MindEA:
         average_fitness_history = []
         
         for generation in range(self.generations):
-            print(f"Generation {generation+1}/{self.generations}")
             # Evaluate population
             fitness_scores = self.evaluate_population(population)
             
@@ -272,8 +272,7 @@ class MindEA:
             average_fitness_history.append(average_fitness)
             
             # Print progress
-            if generation % 10 == 0 or generation == self.generations - 1:
-                print(f"Generation {generation}: Best={best_fitness:.4f}, Avg={average_fitness:.4f}")
+            print(f"Generation {generation + 1}: Best={best_fitness:.4f}, Avg={average_fitness:.4f}")
             
             # Apply elitism (preserve best individuals)
             elite_individuals = self.apply_elitism(population, fitness_scores)

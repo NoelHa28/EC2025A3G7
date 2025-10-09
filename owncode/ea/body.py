@@ -400,8 +400,21 @@ class BodyEA:
         )
         _, _, avg_weights = ea.run()
         return calculate_slope_of_weights(avg_weights)
+    
 
-    def run(self) -> tuple[Genotype, list[float], list[float]]:
+    def load_population(self) -> list[Genotype]:
+        import pickle as pkl
+
+        with open("body_population.pkl", "rb") as f:
+            return pkl.load(f)
+
+    def export_population(self, population: list[Genotype]) -> None:
+        import pickle as pkl
+
+        with open("body_population.pkl", "wb") as f:
+            pkl.dump(population, f)
+
+    def run(self, load_population: bool) -> tuple[Genotype, list[float], list[float]]:
         """
         Run the evolutionary algorithm.
 
@@ -426,6 +439,7 @@ class BodyEA:
             fitness_scores = self._evaluate_population(population)
             best_index = np.argmax(fitness_scores)
             best_individual = population[best_index]
+            Robot(body_genotype=best_individual).save()
 
             # Track statistics
             best_fitness = max(fitness_scores)
@@ -483,7 +497,6 @@ class BodyEA:
             population = new_population
 
             self.export_population(population)
-            save_graph_as_json(Robot(body_genotype=best_individual).graph, 'SAVED_GRAPH.json')
 
         # Return best individual from final generation
         final_fitness_scores = self.evaluate_population(population)
