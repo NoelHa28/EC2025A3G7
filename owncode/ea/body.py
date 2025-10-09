@@ -1,5 +1,6 @@
 from opposites import has_core_opposite_pair, simple_symmetry_score
 from multi_spawn import STOCHASTIC_SPAWN_POSITIONS, set_spawn_position
+from morphology_constraints import is_robot_viable
 
 KILL_FITNESS = -100.0  # you already filter this out in selection
 
@@ -181,11 +182,13 @@ class BodyEA:
 
     def random_genotype(self) -> Genotype:
         """Generate a random genotype."""
-        type_p_genes = RNG.random(self.genotype_size).astype(np.float32)
-        conn_p_genes = RNG.random(self.genotype_size).astype(np.float32)
-        rot_p_genes = RNG.random(self.genotype_size).astype(np.float32)
+        genotype = [
+            RNG.uniform(-1, 1, self.genotype_size).astype(np.float32),
+            RNG.uniform(-100, 100, self.genotype_size).astype(np.float32),
+            RNG.uniform(-100, 100, self.genotype_size).astype(np.float32),
+        ]
 
-        return [type_p_genes, conn_p_genes, rot_p_genes]
+        return genotype
 
     def select_parents(
         self, population: list[Genotype], fitness_scores: list[float]
@@ -348,25 +351,15 @@ class BodyEA:
         _, weights, _ = ea.run()
         return float(max(weights))
 
-        # def _eval_func(self, genotype: Genotype) -> float:
-        ea = MindEA(
-            robot=Robot(genotype),
-            population_size=20,
-            generations=1,
-            mutation_rate=0.5,
-            crossover_rate=0.0,
-            crossover_type="onepoint",
-            elitism=50,  # Keep top 10%
-            selection="tournament",
-            tournament_size=5,
-        )
-        _, weights, _ = ea.run()
-
-        return max(weights)
-
     def create_initial_population(self) -> list[Genotype]:
-        return [self.random_genotype() for _ in range(self.population_size)]
-        return [self.random_genotype() for _ in range(self.population_size)]
+        print("Creating initial population with viability check...")
+        population = []
+        while len(population) < self.population_size:
+            genotype = self.random_genotype()
+            if is_robot_viable(RNG, genotype, max_bricks_per_limb=3):
+                population.append(genotype)
+        print("Initial population created.")
+        return population
 
     def apply_elitism(
         self, population: list[Genotype], fitness_scores: list[float]

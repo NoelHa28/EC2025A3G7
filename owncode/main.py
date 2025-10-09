@@ -80,29 +80,29 @@ def main() -> None:
 
     # Body evolution parameters
     body_params = {
-        "population_size": 1,  # Smaller population for faster testing
-        "generations": 4,  # More generations for better evolution
+        "population_size": 5,  # Smaller population for faster testing
+        "generations": 20,  # More generations for better evolution
         "genotype_size": 64,
-        "mutation_rate": 0.5,  # Lower mutation rate to preserve good solutions
-        "crossover_rate": 0.0,  # Higher crossover rate
+        "mutation_rate": 0.2,  # Lower mutation rate to preserve good solutions
+        "crossover_rate": 0.8,  # Higher crossover rate
         "crossover_type": "uniform",  # Good for real-valued genes
-        "elitism": 2,  # Keep 2 best individuals (10% of population)
+        "elitism": 1,  # Keep 1 best individual (10% of population)
         "selection": "tournament",  # Tournament selection
-        "tournament_size": 3,
+        "tournament_size": 2,
         "dynamic_duration": True,  # Enable dynamic duration
         "dynamic_duration_n_required": 3,  # Require 3 individuals to reach gates
     }
 
     # Mind evolution parameters
     mind_params = {
-        "population_size": 10,
-        "generations": 1,
+        "population_size": 5,
+        "generations": 10,
         "mutation_rate": 0.5,
         "crossover_rate": 0.0,
         "crossover_type": "onepoint",
-        "elitism": 2,
+        "elitism": 1,
         "selection": "tournament",
-        "tournament_size": 3,
+        "tournament_size": 2,
     }
 
     # Create evolutionary algorithm
@@ -130,7 +130,7 @@ def main() -> None:
     plot_evolution_progress(best_fitness_history, avg_fitness_history)
 
     # Simulate and visualize the best robot
-    simulate_best_robot(best_robot, mode="video")
+    simulate_best_robot(best_robot, mode="launcher")
 
 def main_single_robot() -> None:
     genotype_size = 64
@@ -208,6 +208,6 @@ def run_mindEA() -> None:
 
 
 if __name__ == "__main__":
-    # main()
-    main_single_robot()
+    main()
+    # main_single_robot()
     # run_mindEA()
