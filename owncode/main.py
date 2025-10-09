@@ -29,8 +29,8 @@ import random
 type ViewerTypes = Literal["launcher", "video", "simple", "no_control", "frame"]
 
 # ---so  RANDOM GENERATOR SETUP --- #
-SEED = 42000
-RNG = np.random.default_rng(SEED)
+SEED = 98
+RNG = np.random.default_rng()
 np.random.seed(SEED)
 random.seed(SEED)
 
@@ -39,10 +39,6 @@ SCRIPT_NAME = __file__.split("/")[-1][:-3]
 CWD = Path.cwd()
 DATA = CWD / "__data__" / SCRIPT_NAME
 DATA.mkdir(exist_ok=True)
-
-# Global variables
-NUM_OF_MODULES = 30
-
 
 def simulate_best_robot(best_robot: Robot, mode: ViewerTypes = "launcher") -> None:
     """Simulate the best evolved robot."""
@@ -139,17 +135,25 @@ def main() -> None:
 def main_single_robot() -> None:
     genotype_size = 64
 
-    genotype = [
-        RNG.random(genotype_size).astype(np.float32),
-        RNG.random(genotype_size).astype(np.float32),
-        RNG.random(genotype_size).astype(np.float32),
-    ]
+    robot = None
+    while robot is None or not is_robot_viable(robot, max_bricks_per_limb=3):
+        genotype = [
+            RNG.uniform(0, 1, genotype_size).astype(np.float32),
+            RNG.uniform(-100, 100, genotype_size).astype(np.float32),
+            RNG.uniform(-100, 100, genotype_size).astype(np.float32),
+        ]
+        robot = Robot(genotype)
 
-    robot = Robot(genotype)
+    simulate_best_robot(robot)
+    robot = None
+    while robot is None or not is_robot_viable(robot, max_bricks_per_limb=3):
+        genotype = [
+            RNG.uniform(0, 1, genotype_size).astype(np.float32),
+            RNG.uniform(-100, 100, genotype_size).astype(np.float32),
+            RNG.uniform(-100, 100, genotype_size).astype(np.float32),
+        ]
+        robot = Robot(genotype)
 
-    print(robot.graph.out_edges(0, data=True))
-
-    draw_graph(robot.graph)
 
     simulate_best_robot(robot)
 
@@ -157,21 +161,21 @@ def main_single_robot() -> None:
 def run_mindEA() -> None:
 
     genotype_size = 64
-
-    genotype = [
-        RNG.random(genotype_size).astype(np.float32),
-        RNG.random(genotype_size).astype(np.float32),
-        RNG.random(genotype_size).astype(np.float32),
-    ]
-
-    robot = Robot(genotype)
+    robot = None
+    while robot is None or not is_robot_viable(robot, max_bricks_per_limb=3):
+        genotype = [
+            RNG.uniform(0, 1, genotype_size).astype(np.float32),
+            RNG.uniform(-100, 100, genotype_size).astype(np.float32),
+            RNG.uniform(-100, 100, genotype_size).astype(np.float32),
+        ]
+        robot = Robot(genotype)
 
     ea = MindEA(
         robot=robot,
         population_size=200,
         generations=15,
-        mutation_rate=0.5,
-        crossover_rate=0.5,
+        mutation_rate=0.9,
+        crossover_rate=0.0,
         crossover_type="blend",
         elitism=20,
         selection="tournament",

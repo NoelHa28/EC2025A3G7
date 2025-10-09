@@ -13,7 +13,7 @@ from cpg import EvolvableCPG
 
 DATA = Path.cwd() / "__data__"
 
-NUM_OF_MODULES = 30
+NUM_OF_MODULES = 25
 
 import networkx as nx
 
@@ -81,7 +81,7 @@ class Robot:
         if body_genotype is not None:
 
             self.NDE = NeuralDevelopmentalEncodingWithLoading(number_of_modules=NUM_OF_MODULES)
-
+            # self.NDE.save()
             if Path('nde_model.pt').exists():
                 self.NDE.load('nde_model.pt')
 

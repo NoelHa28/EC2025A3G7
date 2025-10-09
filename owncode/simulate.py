@@ -26,7 +26,7 @@ DATA.mkdir(exist_ok=True)
 
 # Global variables
 
-SPAWN_POS = [0.4, 0, 0.1]
+SPAWN_POS = [-.8, 0, 0.1]
 
 
 def experiment(
