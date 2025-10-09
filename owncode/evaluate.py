@@ -14,7 +14,10 @@ from robot import Robot
 from simulate import experiment
 from fitness_function import fitness
 
-def evaluate(robot: Robot, learn_test: bool = False, controller_func: Callable[[], np.ndarray]) -> float:
+from consts import STOCHASTIC_SPAWN_POSITIONS
+
+
+def evaluate(robot: Robot, learn_test: bool = False, controller_func: Callable[[], np.ndarray] = controller.cpg) -> float:
     """
     Evaluate a robot genotype by simulating it and returning fitness.
     Handles invalid or unstable robots safely.
@@ -44,7 +47,7 @@ def evaluate(robot: Robot, learn_test: bool = False, controller_func: Callable[[
                 controller=ctrl,
                 mode="simple",
                 duration=10,
-                spawn_pos=[-0.8, 0, 0.1],  # fixed spawn for learning test
+                spawn_pos=STOCHASTIC_SPAWN_POSITIONS[0],  # fixed spawn for learning test
             )
             
             dist3 = tracker.history["xpos"][0][3]
@@ -53,10 +56,10 @@ def evaluate(robot: Robot, learn_test: bool = False, controller_func: Callable[[
             console.log(f"Distance travelled in learning test: {dist_travelled:.4f}")
             if dist_travelled < 0.2:
                 console.log("Robot failed learning test (did not move enough).")
-                return 0
+                return False
             else:
                 console.log("Robot passed learning test.")
-                return 1  # neutral fitness for passing learning test
+                return True  # neutral fitness for passing learning test
         else:
             # Run simulation
             experiment(

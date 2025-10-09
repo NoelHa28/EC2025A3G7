@@ -8,11 +8,10 @@ from robot import Robot
 from evaluate import evaluate
 import math
 
-SEED = 42
-RNG = np.random.default_rng(SEED)
-
 CTX = mp.get_context("spawn")
 CPU_COUNT = mp.cpu_count()
+
+from consts import RNG, DATA
 
 type Genotype = np.ndarray
 
@@ -232,7 +231,7 @@ class MindEA:
 
     def _eval_func(self, genotype: Genotype) -> Any:
         self.robot.brain.set_genotype(genotype)
-        return evaluate(self.robot, controller.cpg)
+        return evaluate(self.robot)
 
     def create_initial_population(self) -> list[Genotype]:
         return [self.random_genotype() for _ in range(self.population_size)]

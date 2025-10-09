@@ -12,6 +12,7 @@ from ariel.body_phenotypes.robogen_lite.decoders.hi_prob_decoding import (
 from nde import NeuralDevelopmentalEncodingWithLoading
 from cpg import EvolvableCPG
 
+from helpers import load_graph
 from consts import DATA, STOCHASTIC_SPAWN_POSITIONS, NUM_MODULES
 
 def morphology_graph_difference(G1: nx.DiGraph, G2: nx.DiGraph) -> float:
@@ -83,10 +84,11 @@ class Robot:
 
         if body_genotype is not None:
            
+            self.NDE = NeuralDevelopmentalEncodingWithLoading(number_of_modules=NUM_MODULES)
+
             if Path('nde_model.pt').exists():
                 self.NDE.load('nde_model.pt')
             else:
-                self.NDE = NeuralDevelopmentalEncodingWithLoading(number_of_modules=NUM_OF_MODULES)
                 self.NDE.save()
 
             self.NDE.eval()
@@ -110,7 +112,10 @@ class Robot:
     @classmethod
     def load_robot(
         cls,
-        path_to_graph: Path = DATA / "best_robot_body.npy",
+        path_to_graph: Path = DATA / "best_robot_graph.json",
         path_to_brain: Path = DATA / "best_robot_brain.npy"
     ) -> None:
-        return cls(body_genotype=np.load(path_to_graph), mind_genotype=np.load(path_to_brain))
+        
+        print(np.load(path_to_brain, allow_pickle=True))
+
+        return cls(graph=load_graph(path_to_graph))

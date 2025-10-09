@@ -75,15 +75,14 @@ def main(load_pop: bool = True) -> None:
 
     # Body evolution parameters
     body_params = {
-        "population_size": 5,  # Smaller population for faster testing
-        "generations": 4,  # More generations for better evolution
-        "genotype_size": 64,
-        "mutation_rate": 0.8,  # Lower mutation rate to preserve good solutions
-        "crossover_rate": 0.0,  # Higher crossover rate
+        "population_size": 7,  # Smaller population for faster testing
+        "generations": 400,  # More generations for better evolution
+        "mutation_rate": 0.5,  # Lower mutation rate to preserve good solutions
+        "crossover_rate": 0.5,  # Higher crossover rate
         "crossover_type": "uniform",  # Good for real-valued genes
         "elitism": 1,  # Keep 1 best individual (10% of population)
         "selection": "tournament",  # Tournament selection
-        "tournament_size": 2,
+        "tournament_size": 3,
         "dynamic_duration": True,  # Enable dynamic duration
         "dynamic_duration_n_required": 3,  # Require 3 individuals to reach gates
         "top_k_re_eval": 3,  # how many to re-evaluate on all terrains               
@@ -92,12 +91,12 @@ def main(load_pop: bool = True) -> None:
 
     # Mind evolution parameters
     mind_params = {
-        "population_size": 10,
+        "population_size": 50,
         "generations": 15,
-        "mutation_rate": 0.5,
-        "crossover_rate": 0.5,
+        "mutation_rate": 0.9,
+        "crossover_rate": 0.0,
         "crossover_type": "onepoint",
-        "elitism": 5,
+        "elitism": 2,
         "selection": "tournament",
         "tournament_size": 3,
     }
@@ -106,7 +105,6 @@ def main(load_pop: bool = True) -> None:
     ea = BodyEA(
         body_params=body_params,
         mind_params=mind_params,
-        evaluator=evaluate,
     )
 
     console.log(f"Population size: {body_params['population_size']}")
@@ -116,7 +114,7 @@ def main(load_pop: bool = True) -> None:
 
     # Run evolution
     console.log("Evolution started...")
-    best_genes, best_fitness_history, avg_fitness_history = ea.run()
+    best_genes, best_fitness_history, avg_fitness_history = ea.run(load_population=load_pop)
     best_robot = Robot(body_genotype=best_genes)
 
     # Show evolution progress
@@ -139,7 +137,7 @@ def main_single_robot() -> None:
         ]
         robot = Robot(body_genotype=genotype)
 
-    simulate_best_robot(robot, controller_func=controller.random)
+    simulate_best_robot(robot, controller_func=controller.cpg)
 
 def run_mindEA() -> None:
 
@@ -190,7 +188,7 @@ def run_mindEA() -> None:
 
 
 if __name__ == "__main__":
-    # main(load_pop=True)
-    main_single_robot()
+    main(load_pop=False)
+    # main_single_robot()
     # run_mindEA()
 
