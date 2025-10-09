@@ -18,6 +18,11 @@ from .mind import MindEA
 
 type Genotype = list[np.ndarray]
 
+def bouncy_clip(genotype: np.ndarray, limit: int) -> Genotype:
+    genotype = ((genotype + limit) % (2 * limit)) - limit
+    genotype[genotype > limit] = 2 * limit - genotype[genotype > limit]
+    return genotype
+
 
 class Mutate:
     def __init__(self, mutation_rate: float = 0.1) -> None:
@@ -25,20 +30,27 @@ class Mutate:
 
     def gaussian(self, genotype: Genotype) -> Genotype:
         mutated_genotype = []
+        # Noise dependent on genotype
+        sigmas = [0.20, 20, 20]
+        clips = [1, 100.0, 100.0]
 
-        for gene in genotype:
+        for i, gene in enumerate(genotype):
             # Create a copy to avoid modifying the original
             mutated = gene.copy()
             # Create a mask for which genes to mutate
             mutation_mask = RNG.random(len(gene)) < self.mutation_rate
-
+            
+            sigma = sigmas[i]
+            clip = clips[i]
+            
             # Apply Gaussian noise to selected genes
             if np.any(mutation_mask):
-                noise = RNG.normal(0, 0.05, size=len(gene)).astype(np.float32)
+                
+                noise = RNG.normal(0, sigma, size=len(gene)).astype(np.float32)
                 mutated[mutation_mask] += noise[mutation_mask]
 
-                # Clip values to stay within [0, 1] bounds
-                mutated = np.clip(mutated, 0.0, 1.0)
+                # Clip values to stay within the right bounds
+                mutated = bouncy_clip(mutated, clip)
 
             mutated_genotype.append(mutated)
 
@@ -97,33 +109,33 @@ class Crossover:
 
         return offspring1, offspring2
 
-    def _blend_crossover(
-        self, parent1: Genotype, parent2: Genotype, alpha: float = 0.5
-    ) -> tuple[Genotype, Genotype]:
-        offspring1, offspring2 = [], []
+    # def _blend_crossover(
+    #     self, parent1: Genotype, parent2: Genotype, alpha: float = 0.5
+    # ) -> tuple[Genotype, Genotype]:
+    #     offspring1, offspring2 = [], []
 
-        for gene1, gene2 in zip(parent1, parent2):
-            # Calculate min and max values for each gene position
-            min_vals = np.minimum(gene1, gene2)
-            max_vals = np.maximum(gene1, gene2)
+    #     for gene1, gene2 in zip(parent1, parent2):
+    #         # Calculate min and max values for each gene position
+    #         min_vals = np.minimum(gene1, gene2)
+    #         max_vals = np.maximum(gene1, gene2)
 
-            # Calculate range and extend it by alpha
-            gene_range = max_vals - min_vals
-            extended_min = min_vals - alpha * gene_range
-            extended_max = max_vals + alpha * gene_range
+    #         # Calculate range and extend it by alpha
+    #         gene_range = max_vals - min_vals
+    #         extended_min = min_vals - alpha * gene_range
+    #         extended_max = max_vals + alpha * gene_range
 
-            # Generate random values within the extended range
-            child1 = RNG.uniform(extended_min, extended_max).astype(np.float32)
-            child2 = RNG.uniform(extended_min, extended_max).astype(np.float32)
+    #         # Generate random values within the extended range
+    #         child1 = RNG.uniform(extended_min, extended_max).astype(np.float32)
+    #         child2 = RNG.uniform(extended_min, extended_max).astype(np.float32)
 
-            # Clip to maintain [0, 1] bounds
-            child1 = np.clip(child1, 0.0, 1.0)
-            child2 = np.clip(child2, 0.0, 1.0)
+    #         # Clip to maintain [0, 1] bounds
+    #         child1 = np.clip(child1, 0.0, 1.0)
+    #         child2 = np.clip(child2, 0.0, 1.0)
 
-            offspring1.append(child1)
-            offspring2.append(child2)
+    #         offspring1.append(child1)
+    #         offspring2.append(child2)
 
-        return offspring1, offspring2
+    #     return offspring1, offspring2
 
 
 class BodyEA:
