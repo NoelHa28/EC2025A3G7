@@ -63,7 +63,7 @@ def simulate_best_robot(best_robot: Robot, mode: ViewerTypes = "launcher") -> No
     # Show trajectory
     if tracker.history["xpos"] and len(tracker.history["xpos"][0]) > 0:
         show_xpos_history(tracker.history["xpos"][0])
-        f = fitness(tracker.history["xpos"][0])
+        f = fitness(best_robot.spawn_point, tracker.history["xpos"][0])
         console.log(f"Best robot fitness: {f:.4f}")
     else:
         console.log("No movement data recorded!")
@@ -141,18 +141,20 @@ def main_single_robot() -> None:
             )
 
     f = evaluate(robot)
+
+    simulate_best_robot(robot, mode="launcher")
     print(f"Single robot fitness: {f:.4f}")
 
 def run_mindEA() -> None:
 
     robot = None
-    while robot is None or not is_robot_viable(robot, max_bricks_per_limb=3):
+    while robot is None or not is_robot_viable(robot, max_bricks_per_limb=2):
         genotype = [
             RNG.uniform(0, 1, GENOTYPE_SIZE).astype(np.float32),
             RNG.uniform(-100, 100, GENOTYPE_SIZE).astype(np.float32),
             RNG.uniform(-100, 100, GENOTYPE_SIZE).astype(np.float32),
         ]
-        robot = Robot(genotype)
+        robot = Robot(body_genotype=genotype)
 
     ea = MindEA(
         robot=robot,
@@ -192,6 +194,6 @@ def run_mindEA() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    # main()
     # main_single_robot()
-    # run_mindEA()
+    run_mindEA()

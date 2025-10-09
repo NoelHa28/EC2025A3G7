@@ -129,6 +129,15 @@ class Crossover:
     #     return offspring1, offspring2
 
 
+def calculate_slope_of_weights(weights: list[float]) -> float:
+    if len(weights) < 2:
+        return 0.0
+
+    start_weights = weights[0]
+    end_weights = weights[-1]
+    slope = (end_weights - start_weights) / (len(weights) - 1)
+    return slope
+
 class BodyEA:
     def __init__(
         self,
@@ -304,8 +313,8 @@ class BodyEA:
             selection=self.mind_params.get('selection', 'tournament'),
             tournament_size=self.mind_params.get('tournament_size', 3),
         )
-        _, weights, _ = ea.run()
-        return float(max(weights))
+        _, _, avg_weights = ea.run()
+        return calculate_slope_of_weights(avg_weights)
 
     def create_initial_population(self) -> list[Genotype]:
         print("Creating initial population with viability check...")
