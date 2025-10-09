@@ -12,15 +12,7 @@ from ariel.body_phenotypes.robogen_lite.decoders.hi_prob_decoding import (
 from nde import NeuralDevelopmentalEncodingWithLoading
 from cpg import EvolvableCPG
 
-DATA = Path.cwd() / "__data__"
-
-NUM_OF_MODULES = 25
-
-STOCHASTIC_SPAWN_POSITIONS: list[list[float]] = [
-    [-0.8, 0, 0.1],  # start / flat
-    [0.4,  0, 0.1],  # rugged
-    [2.2,  0, 0.1],  # uphill
-]
+from consts import DATA, STOCHASTIC_SPAWN_POSITIONS, NUM_MODULES
 
 def morphology_graph_difference(G1: nx.DiGraph, G2: nx.DiGraph) -> float:
     """
@@ -75,6 +67,7 @@ class Robot:
     def __init__(
         self,
         spawn_point: list[float] = STOCHASTIC_SPAWN_POSITIONS[0],
+        simulation_time: int = 10,
         body_genotype: list[np.ndarray] | None = None,
         graph: None | object = None,
         mind_genotype: np.ndarray | None = None,
@@ -86,6 +79,7 @@ class Robot:
         self.spawn_point = spawn_point
         self.graph = graph
         self.mind_genotype = mind_genotype
+        self.simulation_time = simulation_time
 
         if body_genotype is not None:
            
@@ -96,7 +90,7 @@ class Robot:
                 self.NDE.save()
 
             self.NDE.eval()
-            self.graph = HighProbabilityDecoder(NUM_OF_MODULES).probability_matrices_to_graph(*self.NDE.forward(self.body_genotype))
+            self.graph = HighProbabilityDecoder(NUM_MODULES).probability_matrices_to_graph(*self.NDE.forward(self.body_genotype))
 
         elif graph is not None:
             self.graph = graph

@@ -13,6 +13,7 @@ from robot import Robot
 
 type Genotype = list[np.ndarray]
 
+
 def bouncy_clip(genotype: np.ndarray, limit: int) -> Genotype:
     genotype = ((genotype + limit) % (2 * limit)) - limit
     genotype[genotype > limit] = 2 * limit - genotype[genotype > limit]
@@ -34,13 +35,13 @@ class Mutate:
             mutated = gene.copy()
             # Create a mask for which genes to mutate
             mutation_mask = RNG.random(len(gene)) < self.mutation_rate
-            
+
             sigma = sigmas[i]
             clip = clips[i]
-            
+
             # Apply Gaussian noise to selected genes
             if np.any(mutation_mask):
-                
+
                 noise = RNG.normal(0, sigma, size=len(gene)).astype(np.float32)
                 mutated[mutation_mask] += noise[mutation_mask]
 
@@ -50,6 +51,7 @@ class Mutate:
             mutated_genotype.append(mutated)
 
         return mutated_genotype
+
 
 class Crossover:
     def __init__(self, crossover_type: str = "onepoint") -> None:
@@ -141,6 +143,7 @@ def calculate_slope_of_weights(weights: list[float]) -> float:
     slope = (end_weights - start_weights) / (len(weights) - 1)
     return slope
 
+
 class BodyEA:
     def __init__(
         self,
@@ -153,34 +156,37 @@ class BodyEA:
 
         Args:
             body_params (dict): Parameters for the body evolution algorithm.
-                Expected keys: population_size, generations, genotype_size, 
-                mutation_rate, crossover_rate, crossover_type, elitism, 
+                Expected keys: population_size, generations, genotype_size,
+                mutation_rate, crossover_rate, crossover_type, elitism,
                 selection, tournament_size
             mind_params (dict): Parameters for the mind evolution algorithm.
-                Expected keys: population_size, generations, mutation_rate, 
+                Expected keys: population_size, generations, mutation_rate,
                 crossover_rate, crossover_type, elitism, selection, tournament_size
             evaluator (callable): Function to evaluate the fitness of an individual.
         """
         # Extract body parameters with defaults
-        self.population_size = body_params.get('population_size', 20)
-        self.generations = body_params.get('generations', 10)
-        self.genotype_size = body_params.get('genotype_size', 100)
+        self.population_size = body_params.get("population_size", 20)
+        self.generations = body_params.get("generations", 10)
+        self.genotype_size = body_params.get("genotype_size", 100)
         self.evaluator = evaluator  # Function to evaluate fitness
-        
+
         # Body EA specific parameters
-        mutation_rate = body_params.get('mutation_rate', 0.1)
-        crossover_type = body_params.get('crossover_type', 'onepoint')
-        self.crossover_rate = body_params.get('crossover_rate', 0.7)
-        self.elitism = body_params.get('elitism', 1)
-        self.selection = body_params.get('selection', 'tournament')
-        self.tournament_size = body_params.get('tournament_size', 3)
-        
+        mutation_rate = body_params.get("mutation_rate", 0.1)
+        crossover_type = body_params.get("crossover_type", "onepoint")
+        self.crossover_rate = body_params.get("crossover_rate", 0.7)
+        self.elitism = body_params.get("elitism", 1)
+        self.selection = body_params.get("selection", "tournament")
+        self.tournament_size = body_params.get("tournament_size", 3)
+
         # Initialize mutation and crossover operators
         self.mutate = Mutate(mutation_rate)
         self.crossover = Crossover(crossover_type)
-        
+
         # Store mind parameters for use in _eval_func
         self.mind_params = mind_params
+
+        # multi spawn top k
+        self.top_k_re_eval = body_params.get("top_k_re_eval", 3)
 
     def random_genotype(self) -> Genotype:
         """Generate a random genotype."""
@@ -303,18 +309,51 @@ class BodyEA:
             fitness_scores.append(fitness)
         return fitness_scores
 
+    def _evaluate_population(self, population: list[Genotype]) -> list[float]:
+        """
+        phase 1: eval everyone in this generation on single spawn point
+        phase 2: re eval only topp k on all terrains and aggregate
+        """
+
+        terrains = STOCHASTIC_SPAWN_POSITIONS
+        if len(terrains) == 0:
+            raise ValueError("No terrains configured for STOCHASTIC_SPAWN_POSITIONS")
+
+        base_spawn = self.current_spawn_point
+        base_scores = [self._eval_on_spawn(ind, base_spawn) for ind in population]
+
+        if self.top_k_re_eval <= 0 or len(terrains) == 1:
+            return base_scores
+
+        k = min(self.top_k_re_eval, len(population))
+        top_k_indices = list(np.argsort(base_scores))[-k:]
+        adjusted_scores = base_scores.copy()
+
+        for i in top_k_indices:
+            per_terrain_score = []
+            for spawn in terrains:
+                if spawn == base_spawn:
+                    per_terrain_score.append(base_scores[i])
+                else:
+                    per_terrain_score.append(self._eval_on_spawn(population[i], spawn))
+            adjusted_scores[i] = np.mean(per_terrain_score)
+        
+        print(f"  → Re-evaluated top {k} individuals on {len(terrains)} terrains")
+
+        return adjusted_scores
+
     def _eval_func(self, genotype: Genotype) -> float:
         # Survives -> evaluate brain as before
         ea = MindEA(
-            robot=Robot(self.current_spawn_point, genotype),
-            population_size=self.mind_params.get('population_size', 10),
-            generations=self.mind_params.get('generations', 1),
-            mutation_rate=self.mind_params.get('mutation_rate', 0.5),
-            crossover_rate=self.mind_params.get('crossover_rate', 0.0),
-            crossover_type=self.mind_params.get('crossover_type', 'onepoint'),
-            elitism=self.mind_params.get('elitism', 2),
-            selection=self.mind_params.get('selection', 'tournament'),
-            tournament_size=self.mind_params.get('tournament_size', 3),
+            robot=Robot(spawn_point=self.current_spawn_point, body_genotype=genotype),
+            population_size=self.mind_params.get("population_size", 10),
+            generations=self.mind_params.get("generations", 1),
+            mutation_rate=self.mind_params.get("mutation_rate", 0.5),
+            crossover_rate=self.mind_params.get("crossover_rate", 0.0),
+            crossover_type=self.mind_params.get("crossover_type", "onepoint"),
+            elitism=self.mind_params.get("elitism", 2),
+            selection=self.mind_params.get("selection", "tournament"),
+            tournament_size=self.mind_params.get("tournament_size", 3),
         )
         _, _, avg_weights = ea.run()
         return calculate_slope_of_weights(avg_weights)
@@ -329,7 +368,7 @@ class BodyEA:
                 population.append(genotype)
         print("Initial population created.")
         return population
-    
+
     def apply_elitism(
         self, population: list[Genotype], fitness_scores: list[float]
     ) -> list[Genotype]:
@@ -347,21 +386,35 @@ class BodyEA:
         return STOCHASTIC_SPAWN_POSITIONS[0]
         return STOCHASTIC_SPAWN_POSITIONS[generation % len(STOCHASTIC_SPAWN_POSITIONS)]
 
-    def export_population(self, population: list[Genotype]) -> None:
-        """Export the current population to a file."""
-        import pickle
-
-        with open('saved_population.pkl', 'wb') as f:
-            pickle.dump(population, f)
+    def _eval_on_spawn(self, genotype: Genotype, spawn_point: list[float]) -> float:
+        ea = MindEA(
+            robot=Robot(spawn_point=spawn_point, body_genotype=genotype),
+            population_size=self.mind_params.get("population_size", 10),
+            generations=self.mind_params.get("generations", 1),
+            mutation_rate=self.mind_params.get("mutation_rate", 0.5),
+            crossover_rate=self.mind_params.get("crossover_rate", 0.0),
+            crossover_type=self.mind_params.get("crossover_type", "onepoint"),
+            elitism=self.mind_params.get("elitism", 2),
+            selection=self.mind_params.get("selection", "tournament"),
+            tournament_size=self.mind_params.get("tournament_size", 3),
+        )
+        _, _, avg_weights = ea.run()
+        return calculate_slope_of_weights(avg_weights)
+    
 
     def load_population(self) -> list[Genotype]:
-        """Load a population from a file."""
-        import pickle
+        import pickle as pkl
 
-        with open('saved_population.pkl', 'rb') as f:
-            return pickle.load(f)
+        with open("body_population.pkl", "rb") as f:
+            return pkl.load(f)
 
-    def run(self, load_population: bool = True) -> tuple[Genotype, list[float], list[float]]:
+    def export_population(self, population: list[Genotype]) -> None:
+        import pickle as pkl
+
+        with open("body_population.pkl", "wb") as f:
+            pkl.dump(population, f)
+
+    def run(self, load_population: bool) -> tuple[Genotype, list[float], list[float]]:
         """
         Run the evolutionary algorithm.
 
@@ -383,9 +436,10 @@ class BodyEA:
 
             self.current_spawn_point = self._get_spawn_point(generation)
 
-            fitness_scores = self.evaluate_population(population)
+            fitness_scores = self._evaluate_population(population)
             best_index = np.argmax(fitness_scores)
             best_individual = population[best_index]
+            Robot(body_genotype=best_individual).save()
 
             # Track statistics
             best_fitness = max(fitness_scores)
@@ -443,7 +497,6 @@ class BodyEA:
             population = new_population
 
             self.export_population(population)
-            save_graph_as_json(Robot(body_genotype=best_individual).graph, 'SAVED_GRAPH.json')
 
         # Return best individual from final generation
         final_fitness_scores = self.evaluate_population(population)

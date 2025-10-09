@@ -2,6 +2,7 @@ import numpy as np
 import dynamic_duration as dd
 from robot import Robot
 import mujoco as mj
+from collections.abc import Callable
 
 from ariel import console
 from ariel.utils.tracker import Tracker
@@ -13,7 +14,7 @@ from robot import Robot
 from simulate import experiment
 from fitness_function import fitness
 
-def evaluate(robot: Robot, learn_test: bool = False) -> float:
+def evaluate(robot: Robot, learn_test: bool = False, controller_func: Callable[[], np.ndarray]) -> float:
     """
     Evaluate a robot genotype by simulating it and returning fitness.
     Handles invalid or unstable robots safely.
@@ -31,7 +32,7 @@ def evaluate(robot: Robot, learn_test: bool = False) -> float:
 
         # Simple controller for stability (can swap with nn_controller later)
         ctrl = Controller(
-            controller_callback_function=controller.cpg,
+            controller_callback_function=controller_func,
             tracker=tracker,
         )
 

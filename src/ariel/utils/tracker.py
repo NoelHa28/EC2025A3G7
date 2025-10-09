@@ -23,7 +23,7 @@ class Tracker:
             name_to_bind = "core"
             msg = "No tracking parameters provided, "
             msg += "defaulting to tracking all geoms with 'core' in their name."
-            log.info(msg)
+            # log.info(msg)
 
         # Set default observable attributes
         if observable_attributes is None:

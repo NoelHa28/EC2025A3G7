@@ -1,10 +1,14 @@
 import numpy as np
 import numpy.typing as npt
 
-from ariel.simulation.controllers.hopfs_cpg import HopfCPG
+# from ariel.simulation.controllers.hopfs_cpg import HopfCPG
 
 SEED = 42
 RNG = np.random.default_rng(seed=SEED)
+
+# Type Aliases
+type ArrayLike = npt.NDArray[np.float64]
+
 
 def decode_genotype_to_cpg(genotype: np.ndarray, num_neurons: int) -> tuple[dict[int, list[int]], npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     """
@@ -39,6 +43,59 @@ def decode_genotype_to_cpg(genotype: np.ndarray, num_neurons: int) -> tuple[dict
     phase_diff = phase_flat.reshape(num_neurons, num_neurons)
 
     return adjacency_list, omega, A, h_matrix, phase_diff
+
+class HopfCPG:
+    def __init__(
+        self,
+        num_neurons: int,
+        adjacency_list: dict[int, list[int]],
+        dt: float = 0.02,
+        h: float = 0.1,
+        alpha: float = 1.0,
+    ) -> None:
+        # --- Inherent parameters --- #
+        # Number of neurons
+        self.num_neurons = num_neurons
+
+        # Time step
+        self.dt = dt
+
+        # Learning rate
+        self.alpha = np.ones(num_neurons) * alpha
+
+        # Coupling coefficient
+        self.h = h
+
+        # Adjacency list for coupling
+        self.adjacency_list = adjacency_list
+        if len(adjacency_list) != num_neurons:
+            raise ValueError(
+                "Adjacency list length must match number of neurons."
+            )
+
+        # --- Initialize state variables --- #
+        self.init_state = 0.5
+        self.x: ArrayLike = RNG.uniform(
+            -self.init_state, self.init_state, self.num_neurons
+        )
+        self.y: ArrayLike = RNG.uniform(
+            -self.init_state, self.init_state, self.num_neurons
+        )
+
+        # --- Adjustable parameters --- #
+        # Angular frequency (1Hz default)
+        self.omega = np.ones(num_neurons) * 2 * np.pi
+
+        # Amplitude
+        self.A = np.ones(num_neurons) * 1.0
+
+        # Phase differences
+        self.phase_diff: ArrayLike = np.zeros((num_neurons, num_neurons))
+
+        # Set up ring topology phase differences (neighbors are π/2 apart)
+        for i, conn in adjacency_list.items():
+            for j in conn:
+                self.phase_diff[i, j] = np.pi / 2
 
 class EvolvableCPG(HopfCPG):
     def __init__(
