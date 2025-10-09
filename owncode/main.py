@@ -15,7 +15,7 @@ from ariel.simulation.controllers.controller import Controller
 from ariel.utils.tracker import Tracker
 
 from ea import BodyEA, MindEA
-from robot import Robot
+from robot import STOCHASTIC_SPAWN_POSITIONS, Robot
 from fitness_function import fitness
 from visualise import plot_evolution_progress, show_xpos_history
 from morphology_constraints import is_robot_viable
@@ -75,8 +75,8 @@ def main(load_pop: bool = True) -> None:
 
     # Body evolution parameters
     body_params = {
-        "population_size": 10,  # Smaller population for faster testing
-        "generations": 10,  # More generations for better evolution
+        "population_size": 5,  # Smaller population for faster testing
+        "generations": 4,  # More generations for better evolution
         "genotype_size": 64,
         "mutation_rate": 0.8,  # Lower mutation rate to preserve good solutions
         "crossover_rate": 0.0,  # Higher crossover rate
@@ -86,6 +86,8 @@ def main(load_pop: bool = True) -> None:
         "tournament_size": 2,
         "dynamic_duration": True,  # Enable dynamic duration
         "dynamic_duration_n_required": 3,  # Require 3 individuals to reach gates
+        "top_k_re_eval": 3,  # how many to re-evaluate on all terrains               
+
     }
 
     # Mind evolution parameters
@@ -114,8 +116,8 @@ def main(load_pop: bool = True) -> None:
 
     # Run evolution
     console.log("Evolution started...")
-    best_genes, best_fitness_history, avg_fitness_history = ea.run(load_pop)
-    best_robot = Robot(best_genes)
+    best_genes, best_fitness_history, avg_fitness_history = ea.run()
+    best_robot = Robot(body_genotype=best_genes)
 
     # Show evolution progress
     console.log("Evolution completed!")
@@ -193,7 +195,6 @@ def run_mindEA() -> None:
 
 
 if __name__ == "__main__":
-    # main(load_pop=True)
+    main()
     # main_single_robot()
-    run_mindEA()
-
+    #run_mindEA()
