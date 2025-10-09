@@ -1,6 +1,7 @@
+import random
 import numpy as np
 from pathlib import Path
-from opposites import _find_core, faces_directly_from_core, print_core_faces, has_core_opposite_pair
+import networkx as nx
 
 from ariel.body_phenotypes.robogen_lite.decoders.hi_prob_decoding import (
     HighProbabilityDecoder,
@@ -15,7 +16,11 @@ DATA = Path.cwd() / "__data__"
 
 NUM_OF_MODULES = 25
 
-import networkx as nx
+STOCHASTIC_SPAWN_POSITIONS: list[list[float]] = [
+    [-0.8, 0, 0.1],  # start / flat
+    [0.4,  0, 0.1],  # rugged
+    [2.2,  0, 0.1],  # uphill
+]
 
 def morphology_graph_difference(G1: nx.DiGraph, G2: nx.DiGraph) -> float:
     """
@@ -66,17 +71,21 @@ def morphology_graph_difference(G1: nx.DiGraph, G2: nx.DiGraph) -> float:
     total_diff = 0.6 * node_diff_norm + 0.4 * edge_diff_norm
     return float(min(1.0, total_diff))
 
-
 class Robot:
     def __init__(
         self,
+        spawn_point: list[float] = STOCHASTIC_SPAWN_POSITIONS[0],
         body_genotype: list[np.ndarray] | None = None,
         graph: None | object = None,
         mind_genotype: np.ndarray | None = None
     ) -> None:
         
         assert body_genotype is not None or graph is not None, "Either body_genotype or graph must be provided."
+        
         self.body_genotype = body_genotype
+        self.spawn_point = spawn_point
+        self.graph = graph
+        self.mind_genotype = mind_genotype
 
         if body_genotype is not None:
 
@@ -90,8 +99,6 @@ class Robot:
 
         elif graph is not None:
             self.graph = graph
-
-        self.mind_genotype = mind_genotype
 
         self._number_of_hinges = sum(1 for n in self.graph.nodes if self.graph.nodes[n]["type"] == "HINGE")
         self.brain = EvolvableCPG(self._number_of_hinges)

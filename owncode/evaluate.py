@@ -1,36 +1,23 @@
-import json
-import os
-import sys
 import numpy as np
-import multi_spawn as ms
 import dynamic_duration as dd
 from robot import Robot
 import mujoco as mj
 
-
-
-# Local libraries
 from ariel import console
-from ariel.body_phenotypes.robogen_lite.constructor import (
-    construct_mjspec_from_graph,
-)
-from ariel.simulation.controllers.controller import Controller
 from ariel.utils.tracker import Tracker
+from ariel.simulation.controllers.controller import Controller
+from ariel.body_phenotypes.robogen_lite.constructor import construct_mjspec_from_graph
 
-# Import evolutionary algorithm
-from robot import Robot
-from fitness_function import fitness
-from simulate import experiment
 import controller
+from robot import Robot
+from simulate import experiment
+from fitness_function import fitness
 
-
-def evaluate(robot: Robot, spawn: list[float] | None = None) -> float:
+def evaluate(robot: Robot) -> float:
     """
     Evaluate a robot genotype by simulating it and returning fitness.
     Handles invalid or unstable robots safely.
     """
-    spawn = spawn or ms.current_or_env_default()
-
     try:
         mj.set_mjcb_control(None)  # reset MuJoCo state
 
@@ -55,7 +42,7 @@ def evaluate(robot: Robot, spawn: list[float] | None = None) -> float:
             controller=ctrl,
             mode="simple",
             duration=dd.get_current_duration(),
-            spawn_pos=spawn,
+            spawn_pos=robot.spawn_point,
         )
 
         # --- SAFETY CHECKS ---
@@ -77,7 +64,7 @@ def evaluate(robot: Robot, spawn: list[float] | None = None) -> float:
         #     return -100
 
         # Otherwise compute normal fitness
-        f = fitness(traj)
+        f = fitness(robot.spawn_point, traj)
         steps_recorded = (
             len(tracker.history["xpos"][0]) if tracker.history["xpos"] else 0
         )

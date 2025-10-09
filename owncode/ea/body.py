@@ -1,21 +1,12 @@
-from opposites import has_core_opposite_pair, simple_symmetry_score
-from multi_spawn import STOCHASTIC_SPAWN_POSITIONS, set_spawn_position
-from morphology_constraints import is_robot_viable
-
-KILL_FITNESS = -100.0  # you already filter this out in selection
-
-
 from typing import Any
 from collections.abc import Callable
-import multiprocessing as mp
 
 import numpy as np
-from robot import Robot
 
-SEED = 42
-RNG = np.random.default_rng(SEED)
-
+from morphology_constraints import is_robot_viable
+from consts import STOCHASTIC_SPAWN_POSITIONS, RNG
 from .mind import MindEA
+from robot import Robot
 
 type Genotype = list[np.ndarray]
 
@@ -56,7 +47,6 @@ class Mutate:
             mutated_genotype.append(mutated)
 
         return mutated_genotype
-
 
 class Crossover:
     def __init__(self, crossover_type: str = "onepoint") -> None:
@@ -302,43 +292,9 @@ class BodyEA:
         return fitness_scores
 
     def _eval_func(self, genotype: Genotype) -> float:
-        # Build morphology
-        try:
-            robot = Robot(genotype)
-        except RuntimeError:
-            return KILL_FITNESS  # e.g., no hinges
-
-        G = robot.graph
-
-        # Cheap hard gate (optional, keeps cost low)
-        if not has_core_opposite_pair(G):
-            print("KILL (no opposite pair on core)")
-            return KILL_FITNESS
-
-        # Simple whole-body symmetry score (0..1)
-        score = simple_symmetry_score(G, max_depth=3)
-
-        # Probabilistic kill: worse symmetry -> higher chance to cull
-        threshold = 0.6  # raise to be stricter (e.g., 0.7)
-        softness = 0.3  # raise to soften ramp (e.g., 0.4)
-        p_kill = max(0.0, min(1.0, (threshold - score) / max(softness, 1e-6)))
-
-        # Quick debug line
-        print(f"sym={score:.3f}  p_kill={p_kill:.2f}")
-
-        if RNG.random() < p_kill:
-            print("KILL (probabilistic)")
-        # Quick debug line
-        print(f"sym={score:.3f}  p_kill={p_kill:.2f}")
-
-        if RNG.random() < p_kill:
-            print("KILL (probabilistic)")
-            return KILL_FITNESS
-
         # Survives -> evaluate brain as before
-        # Use mind_params for MindEA configuration
         ea = MindEA(
-            robot=robot,
+            robot=Robot(self.current_spawn_point, genotype),
             population_size=self.mind_params.get('population_size', 10),
             generations=self.mind_params.get('generations', 1),
             mutation_rate=self.mind_params.get('mutation_rate', 0.5),
@@ -356,11 +312,12 @@ class BodyEA:
         population = []
         while len(population) < self.population_size:
             genotype = self.random_genotype()
-            if is_robot_viable(RNG, genotype, max_bricks_per_limb=3):
+            robot = Robot(genotype)
+            if is_robot_viable(robot, max_bricks_per_limb=3):
                 population.append(genotype)
         print("Initial population created.")
         return population
-
+    
     def apply_elitism(
         self, population: list[Genotype], fitness_scores: list[float]
     ) -> list[Genotype]:
@@ -372,6 +329,10 @@ class BodyEA:
         elite_individuals = [population[i] for i in elite_indices]
 
         return elite_individuals
+
+    def _get_spawn_point(self, generation: int) -> list[float]:
+        # Cycle through predefined spawn points based on generation number
+        return STOCHASTIC_SPAWN_POSITIONS[generation % len(STOCHASTIC_SPAWN_POSITIONS)]
 
     def run(self) -> tuple[Genotype, list[float], list[float]]:
         """
@@ -389,12 +350,9 @@ class BodyEA:
 
         for generation in range(self.generations):
             print(f"Generation {generation+1}/{self.generations}")
-            current_spawn = STOCHASTIC_SPAWN_POSITIONS[
-                generation % len(STOCHASTIC_SPAWN_POSITIONS)
-            ]
-            set_spawn_position(current_spawn)
-            print(f"[GEN {generation+1}] using spawn {current_spawn}", flush=True)
-            # Evaluate population
+
+            self.current_spawn_point = self._get_spawn_point(generation)
+
             fitness_scores = self.evaluate_population(population)
 
             # Track statistics

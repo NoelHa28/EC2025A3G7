@@ -1,25 +1,16 @@
 import numpy as np
 
-TARGET_POSITION = [5, 0, 0.5]
+from consts import TARGET_POSITION, STOCHASTIC_SPAWN_POSITIONS
 
-def fitness(history: list[tuple[float, float, float]]) -> float:
-    xt, yt, zt = TARGET_POSITION
-    xc, yc, zc = history[-1] # type: ignore
+def _cartesian_distance(a: list[float], b: list[float]) -> float:
+    if np.array_equal(a, b):
+        return 0.0
+    return np.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))
 
-    # Minimize the distance --> maximize the negative distance
-    cartesian_distance = np.sqrt(
-        (xt - xc) ** 2 + (yt - yc) ** 2 + (zt - zc) ** 2,
-    )
-    return -cartesian_distance
+def fitness(spawn_point: list[float], history: list[tuple[float, float, float]]) -> float:
 
-# def fitness(history: list[tuple[float, float, float]]) -> float:
-#     xt, yt, zt = TARGET_POSITION
-#     x_start, y_start, z_start = history[0]
-#     x3, y3, z3 = history[3]
-#     x_end, y_end, z_end = history[-1]
+    end_to_target = _cartesian_distance(history[-1], TARGET_POSITION)
 
+    start_to_spawn = _cartesian_distance(STOCHASTIC_SPAWN_POSITIONS[0], spawn_point)
 
-#     end_to_target   = np.sqrt((xt - x_end)**2 + (yt - y_end)**2 + (zt - z_end)**2)
-#     start_to_3 = np.sqrt((x3 - x_start)**2 + (y3 - y_start)**2 + (z3 - z_start)**2)
-
-#     return -(end_to_target - start_to_3)
+    return -(end_to_target + start_to_spawn)

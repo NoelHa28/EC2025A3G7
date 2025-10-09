@@ -23,16 +23,11 @@ from simulate import experiment
 from evaluate import evaluate
 import controller
 import random
+from consts import RNG, GENOTYPE_SIZE
 
 
 # Type Aliases
 type ViewerTypes = Literal["launcher", "video", "simple", "no_control", "frame"]
-
-# ---so  RANDOM GENERATOR SETUP --- #
-SEED = 98
-RNG = np.random.default_rng()
-np.random.seed(SEED)
-random.seed(SEED)
 
 # --- DATA SETUP ---
 SCRIPT_NAME = __file__.split("/")[-1][:-3]
@@ -133,40 +128,29 @@ def main() -> None:
     simulate_best_robot(best_robot, mode="launcher")
 
 def main_single_robot() -> None:
-    genotype_size = 64
-
     robot = None
     while robot is None or not is_robot_viable(robot, max_bricks_per_limb=3):
         genotype = [
-            RNG.uniform(0, 1, genotype_size).astype(np.float32),
-            RNG.uniform(-100, 100, genotype_size).astype(np.float32),
-            RNG.uniform(-100, 100, genotype_size).astype(np.float32),
+            RNG.uniform(0, 1, GENOTYPE_SIZE).astype(np.float32),
+            RNG.uniform(-100, 100, GENOTYPE_SIZE).astype(np.float32),
+            RNG.uniform(-100, 100, GENOTYPE_SIZE).astype(np.float32),
         ]
-        robot = Robot(genotype)
+        robot = Robot(
+            spawn_point=[-0.8, 0, 0.1],
+            body_genotype=genotype
+            )
 
-    simulate_best_robot(robot)
-    robot = None
-    while robot is None or not is_robot_viable(robot, max_bricks_per_limb=3):
-        genotype = [
-            RNG.uniform(0, 1, genotype_size).astype(np.float32),
-            RNG.uniform(-100, 100, genotype_size).astype(np.float32),
-            RNG.uniform(-100, 100, genotype_size).astype(np.float32),
-        ]
-        robot = Robot(genotype)
-
-
-    simulate_best_robot(robot)
-
+    f = evaluate(robot)
+    print(f"Single robot fitness: {f:.4f}")
 
 def run_mindEA() -> None:
 
-    genotype_size = 64
     robot = None
     while robot is None or not is_robot_viable(robot, max_bricks_per_limb=3):
         genotype = [
-            RNG.uniform(0, 1, genotype_size).astype(np.float32),
-            RNG.uniform(-100, 100, genotype_size).astype(np.float32),
-            RNG.uniform(-100, 100, genotype_size).astype(np.float32),
+            RNG.uniform(0, 1, GENOTYPE_SIZE).astype(np.float32),
+            RNG.uniform(-100, 100, GENOTYPE_SIZE).astype(np.float32),
+            RNG.uniform(-100, 100, GENOTYPE_SIZE).astype(np.float32),
         ]
         robot = Robot(genotype)
 
