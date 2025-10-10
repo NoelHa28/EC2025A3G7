@@ -52,27 +52,21 @@ class Mutate:
 
     def gaussian(self, genotype: Genotype) -> Genotype:
         mutated_genotype = []
-        # Noise dependent on genotype
-        sigmas = [0.1, 0.2, 0.2]
-        clips = [1, 1, 1]
 
-        for i, gene in enumerate(genotype):
+        for gene in genotype:
             # Create a copy to avoid modifying the original
             mutated = gene.copy()
             # Create a mask for which genes to mutate
             mutation_mask = RNG.random(len(gene)) < self.mutation_rate
 
-            sigma = sigmas[i]
-            clip = clips[i]
-
             # Apply Gaussian noise to selected genes
             if np.any(mutation_mask):
 
-                noise = RNG.normal(0, sigma, size=len(gene)).astype(np.float32)
+                noise = RNG.normal(0, 0.1, size=len(gene)).astype(np.float32)
                 mutated[mutation_mask] += noise[mutation_mask]
 
                 # Clip values to stay within the right bounds
-                mutated = bouncy_clip(mutated, clip)
+                mutated = bouncy_clip(mutated, 1)
 
             mutated_genotype.append(mutated)
 
@@ -443,10 +437,9 @@ class BodyEA:
             # Create new population
             new_population = elite_individuals.copy()
 
-            offspring1, offspring2 = None, None
-
             # Fill rest of population with offspring
             while len(new_population) < self.population_size:
+                offspring1, offspring2 = None, None
                 # Select parents
                 parent1, parent2 = self.select_parents(population, fitness_scores)
 
@@ -496,8 +489,8 @@ class BodyEA:
             # Update population
             population = new_population
 
-            self.export_population(population)
-            self.export_generation(generation)
+            self.export_population(population, generation)
+            # self.export_generation(generation)
 
         # Return best individual from final generation
         final_fitness_scores = self.evaluate_population(population)
