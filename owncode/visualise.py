@@ -38,7 +38,7 @@ def show_xpos_history(robot: Robot, history: list[float], save_path_=None) -> No
     single_frame_renderer(
         model,
         data,
-        camera=camera,
+        # camera=camera,
         save_path=save_path,
         save=True,
     )

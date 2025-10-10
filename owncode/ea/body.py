@@ -361,7 +361,6 @@ class BodyEA:
                 # Filter successful ones
                 successful = [g for g in results if g is not None]
                 population.extend(successful)
-                print(len(population))
 
         print("Initial population created.")
         return population
@@ -410,7 +409,6 @@ class BodyEA:
         average_fitness_history = []
 
         for generation in range(self.generations):
-            print(f"Generation {generation+1}/{self.generations}")
 
             self.current_spawn_point = self._get_spawn_point(generation)
 
@@ -425,11 +423,7 @@ class BodyEA:
             best_fitness_history.append(best_fitness)
             average_fitness_history.append(average_fitness)
 
-            # Print progress
-            if generation % 10 == 0 or generation == self.generations - 1:
-                print(
-                    f"Generation {generation}: Best={best_fitness:.4f}, Avg={average_fitness:.4f}"
-                )
+            print(f"Body Generation {generation+1}/{self.generations}: Best={best_fitness:.4f}, Avg={average_fitness:.4f}")
 
             # Apply elitism (preserve best individuals)
             elite_individuals = self.apply_elitism(population, fitness_scores)

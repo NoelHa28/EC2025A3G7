@@ -114,7 +114,7 @@ class Robot:
         cls,
         path_to_graph: Path = DATA / "best_robot_graph.json",
         path_to_brain: Path = DATA / "best_robot_brain.npy"
-    ) -> None:
+    ) -> 'Robot':
         
         print(np.load(path_to_brain, allow_pickle=True))
 

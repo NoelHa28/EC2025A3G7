@@ -2,6 +2,7 @@ import sys
 from typing import Literal
 from pathlib import Path
 from collections.abc import Callable
+import pickle as pkl
 
 import mujoco as mj
 import numpy as np
@@ -42,8 +43,6 @@ def simulate_best_robot(best_robot: Robot, mode: ViewerTypes = "launcher", contr
 
     # Construct robot
     core = construct_mjspec_from_graph(best_robot.graph)
-
-    best_robot.save()
 
     # Setup tracker
     tracker = Tracker(
@@ -136,8 +135,13 @@ def main_single_robot() -> None:
             RNG.uniform(-1, 1, GENOTYPE_SIZE).astype(np.float32),
         ]
         robot = Robot(body_genotype=genotype)
+    
+    with open("body_population_gen0.pkl", "rb") as f:
+        genotypes = pkl.load(f)
 
-    simulate_best_robot(robot, controller_func=controller.cpg)
+    for g in genotypes:
+        robot = Robot(body_genotype=g)
+        simulate_best_robot(robot)
 
 def run_mindEA() -> None:
 
@@ -149,6 +153,8 @@ def run_mindEA() -> None:
             RNG.uniform(-1, 1, GENOTYPE_SIZE).astype(np.float32),
         ]
         robot = Robot(body_genotype=genotype)
+
+    robot = Robot.load_robot()
 
     ea = MindEA(
         robot=robot,
@@ -188,7 +194,7 @@ def run_mindEA() -> None:
 
 
 if __name__ == "__main__":
-    main(load_pop=False)
-    # main_single_robot()
+    # main(load_pop=False)
+    main_single_robot()
     # run_mindEA()
 
