@@ -49,7 +49,7 @@ def simulate_best_robot(best_robot: Robot, mode: ViewerTypes = "launcher", contr
     # Run simulation with visualization
     experiment(robot=best_robot, core=core, controller=ctrl, mode=mode, duration=120)
 
-    np.save('', tracker.history['xpos'][0])
+    np.save('history_data.npy', tracker.history['xpos'][0])
 
 def main() -> None:
     """Entry point - Run evolutionary algorithm to evolve robots."""
