@@ -1,18 +1,14 @@
 import pickle as pkl
-from typing import Any
-from collections.abc import Callable
 
-from multiprocessing import Pool
 import numpy as np
-
-from ariel.body_phenotypes.robogen_lite.decoders.hi_prob_decoding import draw_graph, save_graph_as_json
+from multiprocessing import Pool
 
 import controller
+from robot import Robot
+from .mind import MindEA
 from evaluate import evaluate
 from morphology_constraints import is_robot_viable
-from consts import STOCHASTIC_SPAWN_POSITIONS, RNG, GENOTYPE_SIZE
-from .mind import MindEA
-from robot import Robot
+from consts import STOCHASTIC_SPAWN_POSITIONS, RNG, GENOTYPE_SIZE, GENOTYPE_RANGE
 
 type Genotype = list[np.ndarray]
 
@@ -32,9 +28,9 @@ def calculate_slope_of_weights(weights: list[float]) -> float:
 
 def random_genotype() -> Genotype:
     return [
-        RNG.uniform(-1, 1, GENOTYPE_SIZE).astype(np.float32),
-        RNG.uniform(-1, 1, GENOTYPE_SIZE).astype(np.float32),
-        RNG.uniform(-1, 1, GENOTYPE_SIZE).astype(np.float32),
+        RNG.uniform(-GENOTYPE_RANGE, GENOTYPE_RANGE, GENOTYPE_SIZE).astype(np.float32),
+        RNG.uniform(-GENOTYPE_RANGE, GENOTYPE_RANGE, GENOTYPE_SIZE).astype(np.float32),
+        RNG.uniform(-GENOTYPE_RANGE, GENOTYPE_RANGE, GENOTYPE_SIZE).astype(np.float32),
     ]
 
 def _evaluate_genotype(_):
@@ -53,7 +49,9 @@ class Mutate:
     def gaussian(self, genotype: Genotype) -> Genotype:
         mutated_genotype = []
 
-        for gene in genotype:
+        sigmas = [.5, .5, .5]
+
+        for gene, sigma in zip(genotype, sigmas):
             # Create a copy to avoid modifying the original
             mutated = gene.copy()
             # Create a mask for which genes to mutate
@@ -62,11 +60,11 @@ class Mutate:
             # Apply Gaussian noise to selected genes
             if np.any(mutation_mask):
 
-                noise = RNG.normal(0, 0.1, size=len(gene)).astype(np.float32)
+                noise = RNG.normal(0, sigma, size=len(gene)).astype(np.float32)
                 mutated[mutation_mask] += noise[mutation_mask]
 
                 # Clip values to stay within the right bounds
-                mutated = bouncy_clip(mutated, 1)
+                mutated = bouncy_clip(mutated, GENOTYPE_RANGE)
 
             mutated_genotype.append(mutated)
 
@@ -124,33 +122,33 @@ class Crossover:
 
         return offspring1, offspring2
 
-    # def _blend_crossover(
-    #     self, parent1: Genotype, parent2: Genotype, alpha: float = 0.5
-    # ) -> tuple[Genotype, Genotype]:
-    #     offspring1, offspring2 = [], []
+    def _blend_crossover(
+        self, parent1: Genotype, parent2: Genotype, alpha: float = 0.5
+    ) -> tuple[Genotype, Genotype]:
+        offspring1, offspring2 = [], []
 
-    #     for gene1, gene2 in zip(parent1, parent2):
-    #         # Calculate min and max values for each gene position
-    #         min_vals = np.minimum(gene1, gene2)
-    #         max_vals = np.maximum(gene1, gene2)
+        for gene1, gene2 in zip(parent1, parent2):
+            # Calculate min and max values for each gene position
+            min_vals = np.minimum(gene1, gene2)
+            max_vals = np.maximum(gene1, gene2)
 
-    #         # Calculate range and extend it by alpha
-    #         gene_range = max_vals - min_vals
-    #         extended_min = min_vals - alpha * gene_range
-    #         extended_max = max_vals + alpha * gene_range
+            # Calculate range and extend it by alpha
+            gene_range = max_vals - min_vals
+            extended_min = min_vals - alpha * gene_range
+            extended_max = max_vals + alpha * gene_range
 
-    #         # Generate random values within the extended range
-    #         child1 = RNG.uniform(extended_min, extended_max).astype(np.float32)
-    #         child2 = RNG.uniform(extended_min, extended_max).astype(np.float32)
+            # Generate random values within the extended range
+            child1 = RNG.uniform(extended_min, extended_max).astype(np.float32)
+            child2 = RNG.uniform(extended_min, extended_max).astype(np.float32)
 
-    #         # Clip to maintain [0, 1] bounds
-    #         child1 = np.clip(child1, 0.0, 1.0)
-    #         child2 = np.clip(child2, 0.0, 1.0)
+            # Clip to maintain [0, 1] bounds
+            child1 = bouncy_clip(child1, GENOTYPE_RANGE)
+            child2 = bouncy_clip(child2, GENOTYPE_RANGE)
 
-    #         offspring1.append(child1)
-    #         offspring2.append(child2)
+            offspring1.append(child1)
+            offspring2.append(child2)
 
-    #     return offspring1, offspring2
+        return offspring1, offspring2
 
 
 class BodyEA:
@@ -297,7 +295,7 @@ class BodyEA:
         selected_index = RNG.choice(len(population), p=probabilities)
         return population[selected_index]
 
-    def evaluate_population(self, population: list[Genotype]) -> list[float]:
+    def evaluate_population(self, population: list[Genotype], fitnesses: list[float]) -> list[float]:
         """
         phase 1: eval everyone in this generation on single spawn point
         phase 2: re eval only topp k on all terrains and aggregate
@@ -306,8 +304,14 @@ class BodyEA:
         terrains = STOCHASTIC_SPAWN_POSITIONS
 
         base_spawn = self.current_spawn_point
-        base_scores = [self._eval_func(ind, base_spawn) for ind in population]
+        base_scores = []
+        for i in range(self.population_size):
+            if fitnesses[i] is None:
+                base_scores.append(self._eval_func(population[i], base_spawn))
+            else:
+                base_scores.append(fitnesses[i])
 
+        return base_scores
         if self.top_k_re_eval == 0 or len(terrains) == 1:
             return base_scores
 
@@ -337,7 +341,7 @@ class BodyEA:
             robot=Robot(spawn_point=spawn_point, body_genotype=genotype),
             population_size=self.mind_params.get("population_size", 10),
             generations=self.mind_params.get("generations", 1),
-            mutation_rate=self.mind_params.get("mutation_rate", 0.5),
+            # mutation_rate=self.mind_params.get("mutation_rate", 0.5),
             crossover_rate=self.mind_params.get("crossover_rate", 0.0),
             crossover_type=self.mind_params.get("crossover_type", "onepoint"),
             elitism=self.mind_params.get("elitism", 2),
@@ -345,10 +349,7 @@ class BodyEA:
             tournament_size=self.mind_params.get("tournament_size", 3),
         )
         _, _, avg_weights = ea.run()
-        return calculate_slope_of_weights(avg_weights)
-
-
-
+        return max(avg_weights)
 
     def create_initial_population(self) -> list[Genotype]:        
         population = []
@@ -367,30 +368,29 @@ class BodyEA:
 
     def apply_elitism(
         self, population: list[Genotype], fitness_scores: list[float]
-    ) -> list[Genotype]:
+    ) -> tuple[list[Genotype], list[float]]:
         if self.elitism <= 0:
             return []
 
         # Get indices sorted by fitness (highest first)
-        elite_indices = np.argsort(fitness_scores)[-self.elitism :]
+        elite_indices = np.argsort(fitness_scores)[-self.elitism:]
         elite_individuals = [population[i] for i in elite_indices]
+        elite_fitnesses = [fitness_scores[i] for i in elite_indices]
 
-        return elite_individuals
+        return elite_individuals, elite_fitnesses
 
     def _get_spawn_point(self, generation: int) -> list[float]:
         # Cycle through predefined spawn points based on generation number
         return STOCHASTIC_SPAWN_POSITIONS[0]
         return STOCHASTIC_SPAWN_POSITIONS[generation % len(STOCHASTIC_SPAWN_POSITIONS)]
-    
-    def load_population(self) -> list[Genotype]:
-        with open("body_population.pkl", "rb") as f:
-            return pkl.load(f)
 
-    def export_population(self, population: list[Genotype], generation: int) -> None:
+    def export_checkpoint(self, population: list[Genotype], fitness_scores: list[float], generation: int) -> None:
         with open(f"body_population_gen{generation}.pkl", "wb") as f:
             pkl.dump(population, f)
+        with open(f"body_fitness_scores_gen{generation}.pkl", "wb") as f:
+            pkl.dump(fitness_scores, f)
 
-    def run(self, load_population: bool) -> tuple[Genotype, list[float], list[float]]:
+    def run(self) -> tuple[Genotype, list[float], list[float]]:
         """
         Run the evolutionary algorithm.
 
@@ -398,11 +398,8 @@ class BodyEA:
             tuple: (best_individual, best_fitness_history, average_fitness_history)
         """
         # Initialize population
-        if load_population:
-            population = self.load_population()
-            self.population_size = len(population)
-        else:
-            population = self.create_initial_population()
+        population = self.create_initial_population()
+        fitnesses = [None] * self.population_size  # Placeholder for fitness scores
 
         # Track statistics
         best_fitness_history = []
@@ -411,11 +408,13 @@ class BodyEA:
         for generation in range(self.generations):
 
             self.current_spawn_point = self._get_spawn_point(generation)
+            fitness_scores = self.evaluate_population(population, fitnesses)
 
-            fitness_scores = self.evaluate_population(population)
+            self.export_checkpoint(population, fitness_scores, generation)
+
             best_index = np.argmax(fitness_scores)
             best_individual = population[best_index]
-            Robot(body_genotype=best_individual).save()
+            # Robot(body_genotype=best_individual).save()
 
             # Track statistics
             best_fitness = max(fitness_scores)
@@ -423,17 +422,18 @@ class BodyEA:
             best_fitness_history.append(best_fitness)
             average_fitness_history.append(average_fitness)
 
-            print(f"Body Generation {generation+1}/{self.generations}: Best={best_fitness:.4f}, Avg={average_fitness:.4f}")
+            print(f"Body Generation {generation+1}/{self.generations}: Best={best_fitness:.4f}, Avg={average_fitness:.4f}, Spawn={self.current_spawn_point}, evals={len([f for f in fitness_scores if f is not None])}/{self.population_size}")
 
             # Apply elitism (preserve best individuals)
-            elite_individuals = self.apply_elitism(population, fitness_scores)
+            elite_individuals, elite_fitnesses = self.apply_elitism(population, fitness_scores)
 
             # Create new population
             new_population = elite_individuals.copy()
 
+            offspring1, offspring2 = None, None
+
             # Fill rest of population with offspring
             while len(new_population) < self.population_size:
-                offspring1, offspring2 = None, None
                 # Select parents
                 parent1, parent2 = self.select_parents(population, fitness_scores)
 
@@ -442,19 +442,20 @@ class BodyEA:
                     child1, child2 = self.crossover(parent1, parent2)
                 else:
                     # If no crossover, children are copies of parents
-                    child1, child2 = [gene.copy() for gene in parent1], [
-                        gene.copy() for gene in parent2
-                    ]
+                    child1 = [gene.copy() for gene in parent1]
+                    child2 = [gene.copy() for gene in parent2]
 
                 # Apply mutation
                 child1 = self.mutate.gaussian(child1)
                 child2 = self.mutate.gaussian(child2)
+                robot1 = Robot(body_genotype=child1)
+                robot2 = Robot(body_genotype=child2)
 
                 if (
                     offspring1 is None
-                    and is_robot_viable(Robot(body_genotype=child1))
+                    and is_robot_viable(robot1)
                     and evaluate(
-                        Robot(body_genotype=child1),
+                        robot1,
                         learn_test=True,
                         controller_func=controller.random
                     )
@@ -463,9 +464,9 @@ class BodyEA:
 
                 if (
                     offspring2 is None
-                    and is_robot_viable(Robot(body_genotype=child2))
+                    and is_robot_viable(robot2)
                     and evaluate(
-                        Robot(body_genotype=child2),
+                        robot2,
                         learn_test=True,
                         controller_func=controller.random
                     )
@@ -480,10 +481,11 @@ class BodyEA:
                 if len(new_population) < self.population_size:
                     new_population.append(offspring2)
 
+                offspring1, offspring2 = None, None
+
             # Update population
             population = new_population
-
-            self.export_population(population, generation)
+            fitnesses = elite_fitnesses + [None] * (self.population_size - len(elite_fitnesses))
             # self.export_generation(generation)
 
         # Return best individual from final generation

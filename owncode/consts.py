@@ -10,16 +10,17 @@ STOCHASTIC_SPAWN_POSITIONS: list[list[float]] = [
 
 TARGET_POSITION = [5, 0, 0.5]
 
-NUM_MODULES = 25
+NUM_MODULES = 30
 
-SEED = 42
+SEED = 1
 RNG = np.random.default_rng()
 
 GENOTYPE_SIZE = 64
+GENOTYPE_RANGE = 10
 
 SCRIPT_NAME = __file__.split("/")[-1][:-3]
 CWD = Path.cwd()
 DATA = CWD / "__data__" / SCRIPT_NAME
 DATA.mkdir(exist_ok=True)
 
-ViewerTypes = Literal["launcher", "video", "simple", "no_control", "frame"]
+type ViewerTypes = Literal["launcher", "video", "simple", "no_control", "frame"]

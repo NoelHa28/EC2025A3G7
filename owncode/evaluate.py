@@ -82,21 +82,7 @@ def evaluate(robot: Robot, learn_test: bool = False, controller_func: Callable[[
         if np.any(~np.isfinite(traj)):
             return -100
 
-        # # Robot shouldn't learn to fall
-        # if all(
-        #     np.isclose(start_cord, end_cord, atol=0.02)
-        #     for start_cord, end_cord in zip(traj[5], traj[-1])
-        # ):
-        #     return -100
-
-        # Otherwise compute normal fitness
-        f = fitness(robot.spawn_point, traj)
-        steps_recorded = (
-            len(tracker.history["xpos"][0]) if tracker.history["xpos"] else 0
-        )
-        # console.log(f"Sim ran for {steps_recorded} steps")
-
-        return float(f)
+        return float(fitness(robot.spawn_point, traj))
 
     except Exception as e:
         console.log(f"Simulation failed: {e}")

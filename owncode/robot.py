@@ -1,4 +1,4 @@
-import random
+import json
 import numpy as np
 from pathlib import Path
 import networkx as nx
@@ -6,14 +6,38 @@ import networkx as nx
 from ariel.body_phenotypes.robogen_lite.decoders.hi_prob_decoding import (
     HighProbabilityDecoder,
     save_graph_as_json,
-    draw_graph
 )
 
 from nde import NeuralDevelopmentalEncodingWithLoading
 from cpg import EvolvableCPG
 
-from helpers import load_graph
 from consts import DATA, STOCHASTIC_SPAWN_POSITIONS, NUM_MODULES
+
+
+def load_graph(source: Path) -> nx.DiGraph:
+    print(source)
+    if Path(source).exists():
+        with open(source, "r") as f:
+            print(f"Loaded graph data: {f}")
+            g_data = json.load(f)
+    else:
+        g_data = json.loads(source)
+    
+
+    G = nx.DiGraph()
+
+    # Add nodes
+    for node in g_data.get("nodes", []):
+        node_id = node.pop("id")
+        G.add_node(node_id, **node)
+
+    # Add edges
+    for edge in g_data.get("edges", []):
+        src = edge.pop("source")
+        tgt = edge.pop("target")
+        G.add_edge(src, tgt, **edge)
+
+    return G
 
 def morphology_graph_difference(G1: nx.DiGraph, G2: nx.DiGraph) -> float:
     """
@@ -105,17 +129,19 @@ class Robot:
         
     
     def save(self) -> None:
-        save_graph_as_json(self.graph, DATA / "best_robot_graph.json")
-        np.save(DATA / "best_robot_body.npy", self.body_genotype)
-        np.save(DATA / "best_robot_brain.npy", self.mind_genotype)
+        save_graph_as_json(self.graph, DATA / "G7_best_robot_graph.json")
+        np.save(DATA / "G7_best_robot_body.npy", self.body_genotype)
+        np.save(DATA / "G7_best_robot_brain.npy", self.brain.genotype)
 
     @classmethod
     def load_robot(
         cls,
-        path_to_graph: Path = DATA / "best_robot_graph.json",
-        path_to_brain: Path = DATA / "best_robot_brain.npy"
+        path_to_graph: Path = DATA / "G7_best_robot_graph.json",
+        path_to_brain: Path = DATA / "G7_best_robot_brain.npy"
     ) -> 'Robot':
         
-        print(np.load(path_to_brain, allow_pickle=True))
-
-        return cls(graph=load_graph(path_to_graph))
+        return cls(
+            graph=load_graph(path_to_graph),
+            mind_genotype=np.load(path_to_brain, allow_pickle=True)
+        )
+    

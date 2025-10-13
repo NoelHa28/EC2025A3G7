@@ -1,7 +1,6 @@
 import numpy as np
 import numpy.typing as npt
-
-# from ariel.simulation.controllers.hopfs_cpg import HopfCPG
+import networkx as nx
 
 SEED = 42
 RNG = np.random.default_rng(seed=SEED)
@@ -18,7 +17,7 @@ def decode_genotype_to_cpg(genotype: np.ndarray, num_neurons: int) -> tuple[dict
 
     # Connection genes (binary)
     adj_size = num_neurons * num_neurons
-    conn_flat = (genotype[gene_cursor:gene_cursor + adj_size] > 0.5).astype(int)
+    conn_flat = np.ones(adj_size, dtype=int)
     adjacency_list = {
         i: [j for j in range(num_neurons) if conn_flat[i*num_neurons + j]]
         for i in range(num_neurons)
@@ -102,7 +101,9 @@ class EvolvableCPG(HopfCPG):
         self,
         num_neurons: int,
         genotype: np.ndarray | None = None,
-        dt: float = 0.02
+        dt: float = 0.02,
+        h: float = 0.1,
+        alpha: float = 1.0,
     ) -> None:
         
         if genotype is None:
@@ -110,7 +111,7 @@ class EvolvableCPG(HopfCPG):
 
         adjacency_list, omega, A, h_matrix, phase_diff = decode_genotype_to_cpg(genotype, num_neurons)
 
-        super().__init__(num_neurons=num_neurons, adjacency_list=adjacency_list, dt=dt)
+        super().__init__(num_neurons=num_neurons, adjacency_list=adjacency_list, dt=dt, h=h, alpha=alpha)
         self.omega = omega
         self.A = A
         self.phase_diff = phase_diff
@@ -163,7 +164,8 @@ class EvolvableCPG(HopfCPG):
         - Phase differences: num_neurons^2 floats [0, 1] (later scaled to [-π, π])
         """
         # Connection genes (0 or 1)
-        conn_genes = RNG.integers(0, 2, size=num_neurons**2)
+        # conn_genes = RNG.integers(0, 2, size=num_neurons**2)
+        conn_genes = np.ones(num_neurons ** 2, dtype=int)
 
         # Frequencies
         freq_genes = RNG.random(size=num_neurons)
@@ -201,3 +203,39 @@ class EvolvableCPG(HopfCPG):
         self.A = A
         self.phase_diff = phase_diff
         self.h_matrix = h_matrix
+
+def make_brain_from_body(body_graph: nx.DiGraph) -> nx.DiGraph:
+    """
+    Construct a brain graph that mirrors the nested body graph structure.
+    Each HINGE becomes a motor neuron.
+    Each BRICK that connects multiple parts becomes an interneuron.
+    Connections follow morphological adjacency recursively.
+    """
+    brain = nx.DiGraph()
+
+    def add_brain_nodes_recursive(node_id):
+        node_data = body_graph.nodes[node_id]
+        node_type = node_data.get("type", "NONE")
+
+        # Add neuron for each functional body node
+        if node_type in {"HINGE", "BRICK"}:
+            brain.add_node(node_id, type=node_type)
+
+        # Traverse all connected nodes (children)
+        for child in body_graph.successors(node_id):
+            child_data = body_graph.nodes[child]
+            child_type = child_data.get("type", "NONE")
+
+            # Recurse first
+            add_brain_nodes_recursive(child)
+
+            # Add edge between neurons if both exist
+            if node_id in brain.nodes and child in brain.nodes:
+                brain.add_edge(node_id, child)
+
+    # Start recursion from morphological roots (no predecessors)
+    roots = [n for n in body_graph.nodes if body_graph.in_degree(n) == 0]
+    for root in roots:
+        add_brain_nodes_recursive(root)
+
+    return brain
